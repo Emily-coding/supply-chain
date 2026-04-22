@@ -190,27 +190,29 @@ def load_cpi():
     for i, (y, m) in enumerate([(y, m) for y in range(2021, 2025) for m in range(1, 13)]):
         months.append((y, m, r_2021_01 + i))
 
-    # Target CPI titles. CPI series titles include phrases like
-    # "CPI INDEX 00: ALL ITEMS ..." or "CPI ANNUAL RATE ...".
-    # We want the INDEX (level), not the rate, for a clean move computation.
+    # Target CPI titles. CPI level series (2015=100) rather than rate series.
     targets = {
-        "all":       "CPI INDEX 00: ALL ITEMS",
-        "food":      "CPI INDEX 01: FOOD AND NON-ALCOHOLIC BEVERAGES",
-        "energy":    "CPI INDEX 04.5: ELECTRICITY, GAS AND OTHER FUELS",
-        "transport": "CPI INDEX 07: TRANSPORT",
-        "housing":   "CPI INDEX 04: HOUSING, WATER, ELECTRICITY, GAS AND OTHER FUELS",
-        "restaurants":"CPI INDEX 11: RESTAURANTS AND HOTELS",
-        "core":      "CPI ALL ITEMS EXCLUDING ENERGY, FOOD, ALCOHOL AND TOBACCO",
+        "all":         ["cpi index 00", "all items"],
+        "food":        ["cpi index 01", "food"],
+        "energy":      ["cpi index 04.5", "electricity, gas"],
+        "housing":     ["cpi index 04", "housing, water"],
+        "transport":   ["cpi index 07", "transport"],
+        "restaurants": ["cpi index 11", "restaurants"],
     }
-    # Scan columns for exact matches (first match per target)
+    # Scan columns: find first column whose lowered title starts with "cpi index"
+    # and contains the target division key; prefer non-rate, non-percent series.
     found = {}
     for c in range(2, ws.max_column + 1):
         t = ws.cell(1, c).value
         if not isinstance(t, str): continue
-        for key, needle in targets.items():
+        tl = t.lower()
+        if "annual rate" in tl or "monthly rate" in tl or "percentage" in tl:
+            continue
+        for key, needles in targets.items():
             if key in found: continue
-            if needle in t and "ANNUAL RATE" not in t.upper() and "MONTHLY" not in t.upper():
+            if all(n in tl for n in needles):
                 found[key] = {"col": c, "title": t, "cdid": ws.cell(2,c).value, "values":{}}
+                break
 
     # Read values
     for key, s in found.items():
@@ -227,16 +229,32 @@ def load_cpi():
 # -----------------------------------------------------------------------------
 def aggregate_by_ioat(series):
     """Average PPI series by IOAT industry code. Return {ioat: {month: avg}}."""
+    # Division-level fallback map, used when a precise 4-digit CPA isn't listed.
+    DIVISION_FALLBACK = {
+        "A02":"A02", "A03":"A03", "A01":"A01",
+        "B05":"B05", "B06":"B06 & B07", "B07":"B06 & B07", "B08":"B08", "B09":"B09",
+        "C10":"C108", "C11":"C1101T1106 & C12", "C12":"C1101T1106 & C12",
+        "C13":"C13","C14":"C14","C15":"C15","C16":"C16","C17":"C17","C18":"C18",
+        "C19":"C19","C20":"C205","C21":"C21","C22":"C22",
+        "C23":"C23OTHER",
+        "C24":"C241T243",
+        "C25":"C25","C26":"C26","C27":"C27","C28":"C28",
+        "C29":"C29","C30":"C30OTHER","C31":"C31","C32":"C32","C33":"C33OTHER",
+        "D35":"D351",
+        "E36":"E36","E37":"E37","E38":"E38","E39":"E39",
+    }
     buckets = {}
     unmapped_cpa = {}
     for s in series:
         cpa = s["cpa"]
         ioat = CPA_TO_IOAT.get(cpa)
-        # Try 3/4-digit prefix if not found
         if ioat is None:
             for trunc_len in (5,4,3):
                 ioat = CPA_TO_IOAT.get(cpa[:trunc_len])
                 if ioat: break
+        if ioat is None:
+            # Division fallback: first 3 chars like "C20", "E36"
+            ioat = DIVISION_FALLBACK.get(cpa[:3])
         if ioat is None:
             unmapped_cpa[cpa] = unmapped_cpa.get(cpa, 0) + 1
             continue
@@ -324,14 +342,22 @@ def compute_pass_through(ppi_by_ioat, irf_data):
 
         # Direct-only theoretical
         theor_direct = a_gas*s_gas + a_elec*s_elec + a_oil*s_oil
-        # Full Leontief: proxy by using the unit scenario's LR value, scaled.
-        # unit_full_lr is the response for +10% on every energy; rescale to avg shock
-        avg_shock = (s_gas + s_elec + s_oil)/3.0
-        theor_full = (rec["unit_full_lr"]/0.10) * avg_shock if avg_shock else 0.0
+        # Full-Leontief theoretical move under the observed 2022-avg shock.
+        # unit_full_lr gives the long-run response to +10% on every energy
+        # product; rescale linearly by the avg energy shock observed.
+        avg_shock = (s_gas + s_elec + s_oil) / 3.0
+        theor_full = (rec["unit_full_lr"] / 0.10) * avg_shock if avg_shock else 0.0
 
-        # Empirical ρ — use q8 observed ÷ theoretical direct
-        rho_direct = (obs_q8 / theor_direct) if (obs_q8 is not None and theor_direct) else None
+        # Empirical pass-through: observed ÷ Leontief-full theoretical.
+        # rho = 1 means the PPI moved exactly as the Leontief model (with full
+        # pass-through) predicts from the observed energy shock alone.
+        # rho > 1 means the PPI rose more than energy alone explains — either
+        # other cost shocks (wages, non-energy inputs) or excess pass-through
+        # (LMM market-power result). rho < 1 means partial pass-through /
+        # margin compression / output adjustment instead of price.
         rho_full   = (obs_q8 / theor_full)   if (obs_q8 is not None and theor_full)   else None
+        rho_direct = (obs_q8 / theor_direct) if (obs_q8 is not None and theor_direct) else None
+        rho_peak   = (obs_peak / theor_full) if (theor_full) else None
 
         rows_out.append({
             "code": code,
@@ -348,6 +374,7 @@ def compute_pass_through(ppi_by_ioat, irf_data):
             "peak_month": peak_m,
             "rho_direct_q8": rho_direct,
             "rho_full_q8":   rho_full,
+            "rho_peak":      rho_peak,
             "rho_assumed":   rec["rho"],
         })
 
