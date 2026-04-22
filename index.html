@@ -1,0 +1,319 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>UK supply chains — energy exposure by SIC 2007</title>
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<style>
+  :root{
+    --bg:#0f1115; --panel:#161922; --muted:#8a93a6; --text:#e6e9f0;
+    --accent:#5ea0ff; --line:#242936;
+    --q:#ef5b5b;   /* quantity-led */
+    --m:#f5a623;   /* mixed */
+    --p:#2ecc71;   /* price-led */
+    --i:#7a6fff;   /* indirect */
+    --hi:#ef5b5b; --mh:#f5a623; --md:#e8d44a; --lo:#2ecc71;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0;background:var(--bg);color:var(--text);
+    font:14px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif}
+  header{padding:24px 32px;border-bottom:1px solid var(--line)}
+  header h1{margin:0 0 6px;font-size:20px}
+  header p{margin:0;color:var(--muted);max-width:900px}
+  main{padding:20px 32px 48px}
+  .controls{display:flex;gap:12px;flex-wrap:wrap;align-items:center;margin-bottom:16px}
+  .controls input[type=search]{
+    flex:1;min-width:240px;background:var(--panel);border:1px solid var(--line);
+    color:var(--text);padding:8px 12px;border-radius:6px;font-size:14px
+  }
+  .pill{
+    background:var(--panel);border:1px solid var(--line);color:var(--text);
+    padding:6px 12px;border-radius:999px;cursor:pointer;font-size:12px;
+    user-select:none
+  }
+  .pill[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:#071019;font-weight:600}
+  .pill small{opacity:.7;margin-left:6px}
+  table{width:100%;border-collapse:collapse;background:var(--panel);
+    border:1px solid var(--line);border-radius:8px;overflow:hidden}
+  th,td{padding:10px 12px;text-align:left;vertical-align:top;border-bottom:1px solid var(--line);font-size:13px}
+  th{background:#1b1f2b;color:#cbd3e1;position:sticky;top:0;cursor:pointer;user-select:none;white-space:nowrap}
+  th:hover{color:var(--accent)}
+  th .arrow{opacity:.4;margin-left:4px;font-size:10px}
+  tr:last-child td{border-bottom:none}
+  tr:hover td{background:#1a1e2a}
+  code{background:#0b0d13;border:1px solid var(--line);padding:1px 6px;border-radius:4px;font-size:12px}
+  .badge{display:inline-block;padding:2px 8px;border-radius:999px;font-size:11px;font-weight:600;white-space:nowrap}
+  .b-q{background:rgba(239,91,91,.15);color:#ff8383;border:1px solid rgba(239,91,91,.4)}
+  .b-m{background:rgba(245,166,35,.15);color:#ffc266;border:1px solid rgba(245,166,35,.4)}
+  .b-p{background:rgba(46,204,113,.15);color:#6fe3a2;border:1px solid rgba(46,204,113,.4)}
+  .b-i{background:rgba(122,111,255,.15);color:#a59aff;border:1px solid rgba(122,111,255,.4)}
+  .lvl{display:inline-block;padding:1px 7px;border-radius:4px;font-size:11px;font-weight:600}
+  .lvl-vh{background:#3a0f13;color:#ff9a9a;border:1px solid #6a1a22}
+  .lvl-h {background:#3a2a10;color:#ffc870;border:1px solid #6a4a18}
+  .lvl-m {background:#2f2f12;color:#e8d44a;border:1px solid #5a5a20}
+  .lvl-l {background:#0f2a1a;color:#7fe0a6;border:1px solid #1b5030}
+  .muted{color:var(--muted)}
+  .legend{margin:8px 0 16px;font-size:12px;color:var(--muted)}
+  .legend span{margin-right:14px}
+  details{background:var(--panel);border:1px solid var(--line);border-radius:8px;margin-top:20px;padding:12px 18px}
+  details summary{cursor:pointer;font-weight:600;font-size:14px}
+  details[open] summary{margin-bottom:8px}
+  details p,details li{color:#cbd3e1;font-size:13px}
+  details code{font-size:12px}
+  .eq{background:#0b0d13;border:1px solid var(--line);padding:10px 14px;border-radius:6px;
+     font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12.5px;color:#cbd3e1;margin:8px 0}
+  footer{padding:18px 32px;border-top:1px solid var(--line);color:var(--muted);font-size:12px}
+  a{color:var(--accent);text-decoration:none}
+  a:hover{text-decoration:underline}
+</style>
+</head>
+<body>
+<header>
+  <h1>UK supply chains — energy exposure by SIC 2007</h1>
+  <p>Sortable, filterable view of UK industries ranked by energy-cost exposure and likely
+  adjustment margin (price vs quantity). Evidence base: ONS environmental accounts and
+  ABS/APS, DESNZ ECUK &amp; ETII list, BoE Bank Underground, and the pass-through literature
+  (Ganapati/Shapiro/Walker 2020; Lafrogne-Joussier/Martin/Méjean 2023; Labandeira et al. 2017).</p>
+</header>
+<main>
+  <div class="controls">
+    <input id="q" type="search" placeholder="Filter by SIC code, sector name, keyword…" />
+    <button class="pill" data-f="all" aria-pressed="true">All</button>
+    <button class="pill" data-f="quantity">Quantity-led</button>
+    <button class="pill" data-f="mixed">Mixed</button>
+    <button class="pill" data-f="price">Price-led</button>
+    <button class="pill" data-f="indirect">Indirect</button>
+  </div>
+  <div class="legend">
+    <span><span class="lvl lvl-vh">V.High</span> / <span class="lvl lvl-h">High</span> / <span class="lvl lvl-m">Medium</span> / <span class="lvl lvl-l">Low</span> exposure</span>
+    <span><span class="badge b-q">Quantity-led</span>  <span class="badge b-m">Mixed</span>  <span class="badge b-p">Price-led</span>  <span class="badge b-i">Indirect</span></span>
+  </div>
+
+  <table id="t">
+    <thead>
+      <tr>
+        <th data-k="sic">SIC 2007<span class="arrow">▾</span></th>
+        <th data-k="div">Div.<span class="arrow">▾</span></th>
+        <th data-k="name">Sector<span class="arrow">▾</span></th>
+        <th data-k="fuel">Primary energy<span class="arrow">▾</span></th>
+        <th data-k="eRank">Energy share<span class="arrow">▾</span></th>
+        <th data-k="tRank">Trade intensity<span class="arrow">▾</span></th>
+        <th data-k="mrg">Adjustment margin<span class="arrow">▾</span></th>
+        <th data-k="ev">Pass-through evidence</th>
+        <th data-k="src">Key UK evidence</th>
+      </tr>
+    </thead>
+    <tbody></tbody>
+  </table>
+
+  <details>
+    <summary>Methodology: using ONS Supply and Use Tables to assess pass-through</summary>
+    <p>The ONS publishes annual Supply and Use Tables (SUT) at 105 industries × 105 products
+    (CPA), and periodic Input-Output Analytical Tables (IOATs) at the same resolution. This is
+    the natural instrument for turning the qualitative story in the table above into numbers.</p>
+
+    <p><strong>Step 1 — direct energy cost share by industry.</strong> From the Use table, for
+    each industry <em>j</em> take purchases of:</p>
+    <ul>
+      <li>CPA 35.1 — <em>Electricity, transmission and distribution</em></li>
+      <li>CPA 35.2 — <em>Gas; distribution of gaseous fuels through mains</em></li>
+      <li>CPA 19.2 — <em>Coke and refined petroleum products</em> (for refining &amp; transport)</li>
+    </ul>
+    <p>Divide by industry <em>j</em>'s total output. Rank percentiles to reproduce the
+    ETII 80th-percentile threshold — but on a continuous scale, which also captures sectors
+    just below the policy cut-off.</p>
+    <div class="eq">s<sub>j</sub> = (U<sub>35.1,j</sub> + U<sub>35.2,j</sub> + U<sub>19.2,j</sub>) / X<sub>j</sub></div>
+
+    <p><strong>Step 2 — technical coefficients matrix A.</strong> Divide each column of the
+    industry-by-industry Use matrix by the column's total output to give A, the intermediate
+    input requirement per £1 of output.</p>
+    <div class="eq">A = U · diag(X)<sup>-1</sup></div>
+
+    <p><strong>Step 3 — Leontief inverse L.</strong> Total (direct + indirect) output needed
+    across the economy to deliver £1 of final demand in industry <em>j</em>:</p>
+    <div class="eq">L = (I − A)<sup>-1</sup></div>
+
+    <p><strong>Step 4 — indirect energy intensity.</strong> Let e be the row vector of direct
+    energy cost shares s<sub>j</sub>. Then the full (direct + indirect) energy content per £1
+    of final demand in each industry is <code>ē = e · L</code>. This is what actually moves
+    when wholesale gas/electricity prices move — and it is typically 1.5–3× the direct
+    share in downstream sectors (food processing, transport, hospitality).</p>
+
+    <p><strong>Step 5 — realised pass-through.</strong> Combine ē with observed ONS Producer
+    Price Index (PPI) and output-volume changes for 2021 Q1 → 2024 Q4:</p>
+    <div class="eq">ρ<sub>j</sub> = ΔPPI<sub>j</sub> / (ē<sub>j</sub> · ΔP<sub>energy</sub>)</div>
+    <p>ρ = 1 ⇒ full pass-through; ρ &lt; 1 ⇒ margin compression / quantity adjustment;
+    ρ &gt; 1 ⇒ excess pass-through (the Lafrogne-Joussier/Martin/Méjean result for
+    concentrated French sectors). The residual adjustment is captured in the output-volume
+    series; by construction ΔPPI and Δvolume sum (with elasticities) to the total
+    incidence of the shock.</p>
+
+    <p><strong>Step 6 — trade-intensity overlay.</strong> Merge HMRC trade data
+    (exports + imports) / output at SIC level. Sectors with high ē and high trade
+    intensity are those where the SUT predicts full pass-through but competitive pressure
+    from imports prevents it — exactly the sectors the ONS 2025 impact paper shows
+    cutting output the most.</p>
+
+    <p>Practical notes: (a) the ONS Analytical IOAT is slightly lagged (latest published
+    ~2019/2020); for the shock period use the 2021 SUT released in 2024 as the best
+    structural base. (b) Gas used as a chemical feedstock (ammonia) sits in CPA 35.2 but
+    is not energy in a thermodynamic sense — useful to flag separately. (c) Imported
+    energy-intensive intermediates partially insulate downstream UK industries — capture
+    this by splitting the Use matrix into domestic vs imported rows (ONS publishes both).</p>
+  </details>
+</main>
+<footer>
+  Sources: ONS, DESNZ, OBR, BoE, Ganapati/Shapiro/Walker (AEJ Applied 2020),
+  Lafrogne-Joussier/Martin/Méjean (CEPII 2023), Labandeira et al. (Energy Policy 2017),
+  OECD (2023). See <a href="uk-energy-exposure.md">uk-energy-exposure.md</a> for full references.
+</footer>
+
+<script>
+const rows = [
+ {sic:"24.10",div:"24",name:"Manufacture of basic iron & steel, ferro-alloys",fuel:"Electricity + coke/gas",eRank:"V.High",tRank:"V.High",mrg:"quantity",
+  ev:"Export-priced; incomplete pass-through in Ganapati et al. specification for steel; UK prices highest in Europe",
+  src:"Commons Library CBP-7317; ONS impact paper 2025; EIUG"},
+ {sic:"24.42",div:"24",name:"Aluminium production",fuel:"Electricity",eRank:"V.High",tRank:"V.High",mrg:"quantity",
+  ev:"LME-priced output; smelters shut rather than pass costs through",
+  src:"ETII list 2023; EIUG"},
+ {sic:"24.43",div:"24",name:"Lead, zinc, tin production",fuel:"Electricity",eRank:"High",tRank:"V.High",mrg:"quantity",
+  ev:"LME-priced; electrometallurgy",src:"ETII list 2023"},
+ {sic:"24.44",div:"24",name:"Copper production",fuel:"Electricity",eRank:"High",tRank:"V.High",mrg:"quantity",
+  ev:"LME-priced",src:"ETII list 2023"},
+ {sic:"24.45",div:"24",name:"Other non-ferrous metals",fuel:"Electricity",eRank:"High",tRank:"V.High",mrg:"quantity",
+  ev:"Commodity-priced",src:"ETII list 2023"},
+ {sic:"20.11",div:"20",name:"Industrial gases",fuel:"Electricity",eRank:"V.High",tRank:"Low",mrg:"price",
+  ev:"Oligopoly; full/excess pass-through likely (LMM 115% result)",src:"ETII list 2023; LMM 2023"},
+ {sic:"20.13",div:"20",name:"Basic inorganic chemicals",fuel:"Gas",eRank:"V.High",tRank:"High",mrg:"quantity",
+  ev:"Gas is feedstock + fuel; commodity-priced",src:"ETII list 2023"},
+ {sic:"20.14",div:"20",name:"Basic organic chemicals",fuel:"Gas + electricity",eRank:"High",tRank:"High",mrg:"mixed",
+  ev:"Steam cracker energy intensive; partial pass-through per Ganapati et al.",
+  src:"ETII list 2023; Ganapati et al. 2020"},
+ {sic:"20.15",div:"20",name:"Fertilisers & nitrogen compounds",fuel:"Gas (feedstock + heat)",eRank:"V.High",tRank:"High",mrg:"quantity",
+  ev:"~80% of variable cost is gas; closure threshold quickly reached",
+  src:"CF Industries Ince closure June 2022; ETII list"},
+ {sic:"20.16",div:"20",name:"Plastics in primary forms",fuel:"Gas + electricity",eRank:"High",tRank:"High",mrg:"mixed",
+  ev:"Partial pass-through; downstream contracts dampen",src:"ETII list 2023"},
+ {sic:"20.17",div:"20",name:"Synthetic rubber in primary forms",fuel:"Gas + electricity",eRank:"High",tRank:"High",mrg:"mixed",
+  ev:"Commodity-priced",src:"ETII list 2023"},
+ {sic:"21.00",div:"21",name:"Pharmaceuticals (basic + preparations)",fuel:"Electricity",eRank:"Low",tRank:"Low",mrg:"price",
+  ev:"Differentiated output; strong pricing power",src:"ONS impact paper 2025"},
+ {sic:"17.11",div:"17",name:"Pulp manufacture",fuel:"Gas + electricity",eRank:"High",tRank:"High",mrg:"quantity",
+  ev:"Continuous process; trade-exposed",src:"ETII list 2023"},
+ {sic:"17.12",div:"17",name:"Paper & paperboard manufacture",fuel:"Gas + electricity (steam)",eRank:"High",tRank:"High",mrg:"quantity",
+  ev:"ONS 2025: EII output -33.6% since 2021 Q1, paper named",
+  src:"ONS impact paper 2025; ETII list"},
+ {sic:"17.21",div:"17",name:"Corrugated paper & packaging",fuel:"Electricity",eRank:"Medium",tRank:"Low",mrg:"price",
+  ev:"Downstream; bulky → local pricing power",src:"—"},
+ {sic:"17.22",div:"17",name:"Household & sanitary paper",fuel:"Electricity",eRank:"Medium",tRank:"Low",mrg:"price",
+  ev:"Branded/differentiated",src:"—"},
+ {sic:"23.11",div:"23",name:"Flat glass",fuel:"Gas",eRank:"V.High",tRank:"High",mrg:"quantity",
+  ev:"Continuous float furnace cannot cycle; binary adjustment",src:"ETII list 2023; EIUG"},
+ {sic:"23.13",div:"23",name:"Hollow glass",fuel:"Gas",eRank:"V.High",tRank:"High",mrg:"quantity",
+  ev:"Continuous furnace",src:"ETII list 2023"},
+ {sic:"23.14",div:"23",name:"Glass fibres",fuel:"Gas",eRank:"V.High",tRank:"High",mrg:"quantity",
+  ev:"Continuous melt",src:"ETII list 2023"},
+ {sic:"23.19",div:"23",name:"Other glass (technical, packaging)",fuel:"Gas",eRank:"High",tRank:"Medium",mrg:"mixed",
+  ev:"Niche + standard mix",src:"ETII list 2023"},
+ {sic:"23.20",div:"23",name:"Refractory products",fuel:"Gas",eRank:"High",tRank:"High",mrg:"quantity",
+  ev:"Kiln-intensive",src:"ETII list 2023"},
+ {sic:"23.31",div:"23",name:"Ceramic tiles & flags",fuel:"Gas",eRank:"High",tRank:"High",mrg:"quantity",
+  ev:"UK sector explicitly exposed; import substitution from EU",src:"ETII list 2023; Manufacturer (ceramics)"},
+ {sic:"23.32",div:"23",name:"Bricks, tiles & construction products",fuel:"Gas",eRank:"High",tRank:"Medium",mrg:"mixed",
+  ev:"Transport costs protect domestically",src:"ETII list 2023"},
+ {sic:"23.41",div:"23",name:"Ceramic household & ornamental",fuel:"Gas",eRank:"High",tRank:"High",mrg:"quantity",
+  ev:"Stoke-on-Trent cluster; very exposed",src:"ETII list 2023"},
+ {sic:"23.42",div:"23",name:"Ceramic sanitary fixtures",fuel:"Gas",eRank:"High",tRank:"High",mrg:"quantity",
+  ev:"Import-exposed",src:"ETII list 2023"},
+ {sic:"23.43",div:"23",name:"Ceramic insulators",fuel:"Gas",eRank:"High",tRank:"High",mrg:"quantity",
+  ev:"Niche tradable",src:"ETII list 2023"},
+ {sic:"23.44",div:"23",name:"Other technical ceramics",fuel:"Gas",eRank:"High",tRank:"High",mrg:"quantity",
+  ev:"High-T kilns",src:"ETII list 2023"},
+ {sic:"23.51",div:"23",name:"Cement",fuel:"Coal / petcoke / gas",eRank:"High",tRank:"Low",mrg:"price",
+  ev:"Transport costs protect; concentrated UK market → pass-through",src:"ETII list 2023; Ganapati et al. include cement"},
+ {sic:"23.52",div:"23",name:"Lime & plaster",fuel:"Gas / coal",eRank:"High",tRank:"Medium",mrg:"mixed",
+  ev:"Similar to cement but less concentrated",src:"ETII list 2023"},
+ {sic:"23.61",div:"23",name:"Concrete products",fuel:"Electricity",eRank:"Medium",tRank:"Low",mrg:"price",
+  ev:"Downstream of cement; local market",src:"Ganapati et al. 2020 (concrete)"},
+ {sic:"13.10",div:"13",name:"Textile preparation & spinning",fuel:"Gas + electricity",eRank:"Medium",tRank:"High",mrg:"mixed",
+  ev:"Small UK footprint; import competition strong",src:"—"},
+ {sic:"13.20",div:"13",name:"Textile weaving",fuel:"Gas + electricity",eRank:"Medium",tRank:"High",mrg:"mixed",
+  ev:"Import competition",src:"—"},
+ {sic:"13.30",div:"13",name:"Textile finishing",fuel:"Gas (drying/finishing)",eRank:"High",tRank:"High",mrg:"quantity",
+  ev:"High-T dyeing; trade-exposed",src:"ETII list 2023"},
+ {sic:"16.10",div:"16",name:"Sawmilling & planing of wood",fuel:"Electricity + biomass",eRank:"Medium",tRank:"Medium",mrg:"mixed",
+  ev:"Kilns; on-site biomass buffers",src:"ETII list 2023"},
+ {sic:"16.21",div:"16",name:"Veneer sheets & wood-based panels",fuel:"Electricity + biomass",eRank:"Medium",tRank:"Medium",mrg:"mixed",
+  ev:"Tradable",src:"ETII list 2023"},
+ {sic:"19.20",div:"19",name:"Petroleum refining",fuel:"Refinery fuel gas",eRank:"Medium",tRank:"High",mrg:"quantity",
+  ev:"Output priced globally; margin (crack spread) compresses",src:"Ganapati et al. 2020 (gasoline)"},
+ {sic:"10.xx",div:"10",name:"Food manufacturing (various)",fuel:"Gas + electricity",eRank:"Medium",tRank:"Low",mrg:"price",
+  ev:"ONS 2025: food & beverage 'largely able to pass on higher energy costs and remain profitable'",
+  src:"ONS impact paper 2025; Bank Underground 2023"},
+ {sic:"11.xx",div:"11",name:"Beverage manufacturing",fuel:"Gas + electricity",eRank:"Medium",tRank:"Low",mrg:"price",
+  ev:"Differentiated output; pricing power",src:"ONS impact paper 2025"},
+ {sic:"49-53",div:"49-53",name:"Transport & logistics",fuel:"Diesel / electricity",eRank:"Medium",tRank:"—",mrg:"indirect",
+  ev:"Indirect energy intensity 17.5% (ONS CPI 2022); persistent pass-through",src:"ONS CPI 2022; BoE 2023"},
+ {sic:"55-56",div:"55-56",name:"Accommodation & food service",fuel:"Gas + electricity",eRank:"Medium",tRank:"—",mrg:"indirect",
+  ev:"BoE: long lag pass-through into hospitality prices",src:"Bank Underground 2023"},
+ {sic:"01",div:"01",name:"Agriculture",fuel:"Diesel + gas",eRank:"Medium",tRank:"Medium",mrg:"indirect",
+  ev:"Feeds food inflation through SUT; fertiliser cost is the main channel",src:"ONS food & energy inflation 2023"},
+];
+
+const levelClass = {"V.High":"lvl-vh","High":"lvl-h","Medium":"lvl-m","Low":"lvl-l","—":"lvl-m"};
+const levelRank  = {"V.High":4,"High":3,"Medium":2,"Low":1,"—":0};
+const mrgClass   = {quantity:"b-q",mixed:"b-m",price:"b-p",indirect:"b-i"};
+const mrgLabel   = {quantity:"Quantity-led",mixed:"Mixed",price:"Price-led",indirect:"Indirect"};
+
+const tbody = document.querySelector("#t tbody");
+function render(data){
+  tbody.innerHTML = data.map(r => `
+    <tr>
+      <td><code>${r.sic}</code></td>
+      <td class="muted">${r.div}</td>
+      <td>${r.name}</td>
+      <td class="muted">${r.fuel}</td>
+      <td><span class="lvl ${levelClass[r.eRank]}">${r.eRank}</span></td>
+      <td><span class="lvl ${levelClass[r.tRank]}">${r.tRank}</span></td>
+      <td><span class="badge ${mrgClass[r.mrg]}">${mrgLabel[r.mrg]}</span></td>
+      <td>${r.ev}</td>
+      <td class="muted">${r.src}</td>
+    </tr>`).join("");
+}
+render(rows);
+
+let filter = "all", q = "";
+function apply(){
+  const term = q.toLowerCase();
+  const out = rows.filter(r =>
+    (filter==="all"||r.mrg===filter) &&
+    (!term || (r.sic+" "+r.name+" "+r.fuel+" "+r.ev+" "+r.src+" "+mrgLabel[r.mrg]).toLowerCase().includes(term))
+  );
+  render(out);
+}
+
+document.querySelectorAll(".pill").forEach(b => b.addEventListener("click",()=>{
+  document.querySelectorAll(".pill").forEach(x => x.setAttribute("aria-pressed","false"));
+  b.setAttribute("aria-pressed","true");
+  filter = b.dataset.f; apply();
+}));
+document.getElementById("q").addEventListener("input",e=>{q=e.target.value;apply();});
+
+let sortKey=null, sortDir=1;
+document.querySelectorAll("#t thead th").forEach(th=>th.addEventListener("click",()=>{
+  const k = th.dataset.k;
+  if(sortKey===k) sortDir*=-1; else {sortKey=k;sortDir=1;}
+  const copy = rows.slice();
+  copy.sort((a,b)=>{
+    let va=a[k], vb=b[k];
+    if(k==="eRank"||k==="tRank"){ va=levelRank[va]||0; vb=levelRank[vb]||0; }
+    if(va<vb) return -1*sortDir;
+    if(va>vb) return  1*sortDir;
+    return 0;
+  });
+  rows.splice(0,rows.length,...copy);
+  apply();
+}));
+</script>
+</body>
+</html>
