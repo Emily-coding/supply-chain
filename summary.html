@@ -1,0 +1,453 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>UK Energy Pass-Through — Data Summary</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<style>
+  :root {
+    --ink: #1b1b1b;
+    --muted: #666;
+    --line: #d8d6cf;
+    --bg: #faf8f4;
+    --card: #fff;
+    --accent: #a32c2c;
+    --accent2: #2a5588;
+    --good: #1f6b3b;
+    --bad: #a32c2c;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    padding: 40px 24px 80px;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    color: var(--ink);
+    background: var(--bg);
+    line-height: 1.5;
+  }
+  .wrap { max-width: 1100px; margin: 0 auto; }
+  header h1 {
+    font-family: "Iowan Old Style", Georgia, serif;
+    font-size: 34px;
+    margin: 0 0 4px;
+    letter-spacing: -0.01em;
+  }
+  header p.sub {
+    margin: 0 0 8px;
+    color: var(--muted);
+    font-size: 14px;
+  }
+  header .tag {
+    display: inline-block;
+    font-size: 11px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--accent);
+    border: 1px solid var(--accent);
+    padding: 2px 8px;
+    border-radius: 3px;
+    margin-right: 6px;
+  }
+  section { margin-top: 40px; }
+  h2 {
+    font-family: "Iowan Old Style", Georgia, serif;
+    font-size: 22px;
+    margin: 0 0 6px;
+    border-bottom: 1px solid var(--line);
+    padding-bottom: 6px;
+  }
+  h2 + p.lede { color: var(--muted); font-size: 14px; margin: 0 0 18px; }
+  .grid { display: grid; gap: 16px; }
+  .grid.c4 { grid-template-columns: repeat(4, 1fr); }
+  .grid.c2 { grid-template-columns: repeat(2, 1fr); }
+  @media (max-width: 780px) {
+    .grid.c4 { grid-template-columns: repeat(2, 1fr); }
+    .grid.c2 { grid-template-columns: 1fr; }
+  }
+  .card {
+    background: var(--card);
+    border: 1px solid var(--line);
+    padding: 18px;
+    border-radius: 4px;
+  }
+  .card .label {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--muted);
+    margin: 0 0 6px;
+  }
+  .card .value {
+    font-family: "Iowan Old Style", Georgia, serif;
+    font-size: 28px;
+    margin: 0;
+    line-height: 1.1;
+  }
+  .card .hint { font-size: 12px; color: var(--muted); margin: 4px 0 0; }
+  .value.pos { color: var(--bad); }
+  .chart-box {
+    background: var(--card);
+    border: 1px solid var(--line);
+    padding: 16px;
+    border-radius: 4px;
+  }
+  .chart-box .chart-wrap { position: relative; height: 360px; }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    background: var(--card);
+    font-size: 13px;
+  }
+  th, td {
+    padding: 8px 10px;
+    text-align: right;
+    border-bottom: 1px solid var(--line);
+  }
+  th:first-child, td:first-child { text-align: left; }
+  th {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--muted);
+    border-bottom: 2px solid var(--line);
+    background: #f3f1ec;
+  }
+  tbody tr:hover td { background: #f5f3ee; }
+  .num { font-variant-numeric: tabular-nums; }
+  .pos { color: var(--bad); }
+  .neg { color: var(--good); }
+  ul.caveats { padding-left: 20px; font-size: 14px; }
+  ul.caveats li { margin-bottom: 6px; }
+  .err {
+    padding: 20px;
+    background: #fff2f2;
+    border: 1px solid var(--bad);
+    color: var(--bad);
+    font-family: monospace;
+    font-size: 13px;
+  }
+  footer {
+    margin-top: 60px;
+    padding-top: 20px;
+    border-top: 1px solid var(--line);
+    font-size: 12px;
+    color: var(--muted);
+  }
+  footer code { font-size: 11px; background: #eee; padding: 1px 4px; border-radius: 2px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <span class="tag">Summary</span>
+  <span class="tag" style="color:var(--accent2);border-color:var(--accent2)">2021–2024</span>
+  <h1>UK energy-price pass-through</h1>
+  <p class="sub">Observed industry PPI moves, and a CPA×COICOP bridge from factory-gate to consumer prices. Built from ONS 2023 IOAT + PPI + CPI + ONS CPA↔COICOP household-expenditure converter.</p>
+</header>
+
+<div id="error" style="display:none" class="err"></div>
+
+<!-- Energy shock -->
+<section id="energy">
+  <h2>Wholesale-ish energy shock, 2021 → peak</h2>
+  <p class="lede">UK PPI for the three energy-producing industries. The Leontief propagation elsewhere in the model assumes these are the exogenous cost drivers.</p>
+  <div class="grid c4" id="energy-cards"></div>
+</section>
+
+<!-- PPI trajectories -->
+<section id="traj">
+  <h2>PPI trajectories, 2021-01 = 100</h2>
+  <p class="lede">Energy-producing industries versus a sample of downstream goods industries and the output-weighted headline PPI.</p>
+  <div class="chart-box"><div class="chart-wrap"><canvas id="chart-traj"></canvas></div></div>
+</section>
+
+<!-- CPI bridge -->
+<section id="bridge">
+  <h2>CPI bridge: observed vs predicted at peak</h2>
+  <p class="lede">For each CPI division d, predicted Δ = Σ<sub>cpa</sub> (hh_£[cpa]×prop[cpa,d] / total_hh[d]) × ΔPPI<sub>cpa</sub>. The bridge over-predicts for services-heavy divisions (housing services, transport services) because SPPI is not yet wired in.</p>
+  <div class="grid c2">
+    <div class="chart-box"><div class="chart-wrap"><canvas id="chart-bridge"></canvas></div></div>
+    <div class="card" style="padding:0">
+      <table id="bridge-table">
+        <thead><tr><th>CPI division</th><th>Observed</th><th>Predicted</th><th>Gap</th><th>N</th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<!-- Contributors to 04.5 energy -->
+<section id="contrib-energy">
+  <h2>Who drives CPI 04.5 (electricity, gas, fuels)?</h2>
+  <p class="lede">Contribution = household-expenditure share in the division × industry PPI move. D351 (electricity) and D352_3 (gas) account for essentially all of it.</p>
+  <div class="chart-box"><div class="chart-wrap" style="height:260px"><canvas id="chart-contrib-energy"></canvas></div></div>
+</section>
+
+<!-- Contributors to 01 food -->
+<section id="contrib-food">
+  <h2>Who drives CPI 01 (food)?</h2>
+  <p class="lede">Food-manufacturing heterogeneity: agriculture (A01) and dairy (C105) dominate; the ~3pp gap between observed (33.3%) and predicted (30.2%) is a good fit for a goods-only bridge.</p>
+  <div class="chart-box"><div class="chart-wrap" style="height:260px"><canvas id="chart-contrib-food"></canvas></div></div>
+</section>
+
+<!-- Industry pass-through table -->
+<section id="industries">
+  <h2>Industries by direct energy cost share</h2>
+  <p class="lede">Ranked by direct gas + electricity + oil share of output from the 2023 IxI A matrix. ρ<sub>peak</sub> = observed peak PPI move ÷ Leontief-predicted move from avg-2022 energy shock. ρ below 1 ⇒ partial pass-through or volume-loss margin; ρ above 1 ⇒ excess pass-through or other cost shocks.</p>
+  <div class="card" style="padding:0">
+    <table id="industry-table">
+      <thead>
+        <tr>
+          <th>Code</th><th>Industry</th>
+          <th>Direct energy share</th>
+          <th>HH share of output</th>
+          <th>Obs peak PPI</th>
+          <th>ρ<sub>peak</sub></th>
+          <th>Agg method</th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+  </div>
+</section>
+
+<!-- Caveats -->
+<section id="caveats">
+  <h2>Caveats</h2>
+  <ul class="caveats">
+    <li><b>Services not yet wired in.</b> CPI divisions with heavy services content (04 housing, 07 transport, 09 recreation, 11 restaurants) are over-predicted because the bridge currently only sees goods PPI. Wiring SPPI is the next task.</li>
+    <li><b>Retail / transport margins ignored.</b> The bridge treats factory-gate PPI as the consumer-facing price. Any margin change between 2021 and 2024 shows up as "gap" rather than being modelled.</li>
+    <li><b>Within-bucket 4-digit CPA weights are not available.</b> Where an IOAT bucket contains multiple 4-digit CPA PPI series and ONS does not publish a bucket-level aggregate, we use simple mean across components. 28/51 buckets use the ONS aggregate directly; 20 fall back to simple mean.</li>
+    <li><b>N=1 shock.</b> The 2022 episode is a single correlated gas/oil/electricity event; ρ estimates are conditional on that shock, not a structural parameter. Co-moving sterling depreciation and post-Covid demand are confounders.</li>
+    <li><b>Internal shock definition.</b> The Leontief "shock" is currently the UK PPI move for D351/D352_3/C19, which already bakes in retail/regulatory pass-through. Switching to external wholesale (DESNZ NBP gas, N2EX baseload electricity, BoE Brent sterling) would separate upstream from downstream pass-through.</li>
+    <li><b>CPA→COICOP proportions from 2019.</b> Latest pre-Covid year; basket shifts since then are not captured in the weights.</li>
+  </ul>
+</section>
+
+<footer>
+  <b>Sources:</b>
+  ONS Input-Output Analytical Tables 2023 (industry-by-industry and product-by-product);
+  ONS PPI Output Domestic (MM22, monthly);
+  ONS CPI (MM23, monthly);
+  ONS Services PPI (quarterly — to be wired in);
+  ONS CPA↔COICOP Converter for Household Consumption, 1997–2020.
+  <br><br>
+  <b>Files:</b>
+  <code>data/iot2023industry.xlsx</code>,
+  <code>data/iot2023product.xlsx</code>,
+  <code>data/ppi.xlsx</code>,
+  <code>data/mm23.xlsx</code>,
+  <code>data/sppi.xlsx</code>,
+  <code>data/coicopconverterforhouseholdconsumption19972020.xlsx</code>.
+  <br>Generated JSON: <code>data/irf.json</code>, <code>data/observed.json</code>.
+  <br><br>
+  <span id="runstamp"></span>
+</footer>
+
+</div>
+
+<script>
+(async function() {
+  const errEl = document.getElementById('error');
+  let obs, irf;
+  try {
+    [obs, irf] = await Promise.all([
+      fetch('data/observed.json').then(r => r.json()),
+      fetch('data/irf.json').then(r => r.json()),
+    ]);
+  } catch (e) {
+    errEl.style.display = 'block';
+    errEl.textContent = 'Failed to load data/observed.json or data/irf.json — are you serving this file over HTTP? '
+      + 'From the repo root: python3 -m http.server 8000, then open http://localhost:8000/summary.html';
+    return;
+  }
+
+  const fmtPct = (x, digits=1) => x == null ? '—' : (x >= 0 ? '+' : '') + (x * 100).toFixed(digits) + '%';
+  const fmtPp  = (x) => x == null ? '—' : (x >= 0 ? '+' : '') + (x * 100).toFixed(1) + 'pp';
+
+  // ── Energy cards ─────────────────────────────────────────────────────────
+  const energyLabels = {
+    'C19':    ['Refined petroleum',         'ONS PPI output, C19'],
+    'D351':   ['Electricity',               'ONS PPI output, D351'],
+    'D352_3': ['Gas (+ steam, aircon)',     'ONS PPI output, D352/D353'],
+  };
+  const ecards = document.getElementById('energy-cards');
+  for (const k of ['C19','D351','D352_3']) {
+    const v = obs.energy_ppi[k];
+    const [label, hint] = energyLabels[k];
+    const peakMonth = v.peak_month;
+    ecards.insertAdjacentHTML('beforeend', `
+      <div class="card">
+        <p class="label">${label}</p>
+        <p class="value pos">${fmtPct(v.peak_shock, 0)}</p>
+        <p class="hint">peak ${peakMonth} · avg 2022 ${fmtPct(v.avg_2022_shock, 0)}<br>${hint}</p>
+      </div>
+    `);
+  }
+  // 4th card — weighted headline PPI peak
+  const hl = obs.ppi_weighted_headline.index;
+  const hlMonths = Object.keys(hl).sort();
+  const hl0 = hl[hlMonths[0]];
+  let hlPeak = -Infinity, hlPeakMonth = null;
+  for (const m of hlMonths) { if (hl[m] > hlPeak) { hlPeak = hl[m]; hlPeakMonth = m; } }
+  const hlPeakMove = hlPeak / hl0 - 1;
+  ecards.insertAdjacentHTML('beforeend', `
+    <div class="card">
+      <p class="label">Weighted headline PPI</p>
+      <p class="value pos">${fmtPct(hlPeakMove, 0)}</p>
+      <p class="hint">peak ${hlPeakMonth} · output-weighted across ${obs.ppi_weighted_headline.n_industries} industries<br>IOT!P1 weights</p>
+    </div>
+  `);
+
+  // ── PPI trajectories ─────────────────────────────────────────────────────
+  const months = Object.keys(obs.ppi_index_by_ioat.D351 || {}).sort();
+  const trajCodes = [
+    ['D352_3',         'Gas',            '#b6283a'],
+    ['D351',           'Electricity',    '#2a5588'],
+    ['C19',            'Refined oil',    '#e67e22'],
+    ['C20A',           'Industrial gas/fertilisers', '#8e44ad'],
+    ['C241T243',       'Iron & steel',   '#555'],
+    ['C108',           'Other food mfg', '#1f6b3b'],
+    ['C105',           'Dairy',          '#2ca063'],
+    ['__HEADLINE__',   'Weighted headline PPI', '#000'],
+  ];
+  const trajDatasets = trajCodes.map(([code,label,color]) => {
+    const series = code === '__HEADLINE__' ? obs.ppi_weighted_headline.index : (obs.ppi_index_by_ioat[code] || {});
+    return {
+      label,
+      data: months.map(m => series[m] ?? null),
+      borderColor: color,
+      backgroundColor: color,
+      borderWidth: code === '__HEADLINE__' ? 2.5 : 1.6,
+      borderDash: code === '__HEADLINE__' ? [6,4] : [],
+      pointRadius: 0,
+      tension: 0.15,
+    };
+  }).filter(d => d.data.some(x => x !== null));
+
+  new Chart(document.getElementById('chart-traj'), {
+    type: 'line',
+    data: { labels: months, datasets: trajDatasets },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      scales: {
+        x: { ticks: { maxTicksLimit: 12, autoSkip: true } },
+        y: { title: { display: true, text: 'Index (2021-01 = 100)' }, beginAtZero: false },
+      },
+      plugins: { legend: { position: 'bottom' } },
+    },
+  });
+
+  // ── CPI bridge chart + table ─────────────────────────────────────────────
+  const cmp = obs.cpi_bridge.comparison_observed_vs_predicted;
+  const divOrder = ['food','energy','housing','transport','restaurants'];
+  const presentDivs = divOrder.filter(k => cmp[k]);
+  const labels = presentDivs.map(k => `${k}\n(div ${cmp[k].division})`);
+  const observedArr  = presentDivs.map(k => (cmp[k].observed_peak  ?? 0) * 100);
+  const predictedArr = presentDivs.map(k => (cmp[k].predicted_peak ?? 0) * 100);
+
+  new Chart(document.getElementById('chart-bridge'), {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [
+        { label: 'Observed', data: observedArr,  backgroundColor: '#2a5588' },
+        { label: 'Predicted (bridge)', data: predictedArr, backgroundColor: '#a32c2c' },
+      ],
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      scales: { y: { title: { display: true, text: 'Peak move vs 2021-01 (%)' } } },
+      plugins: { legend: { position: 'bottom' } },
+    },
+  });
+
+  const btbody = document.querySelector('#bridge-table tbody');
+  for (const k of presentDivs) {
+    const v = cmp[k];
+    const gap = (v.observed_peak != null && v.predicted_peak != null)
+      ? v.predicted_peak - v.observed_peak : null;
+    btbody.insertAdjacentHTML('beforeend', `
+      <tr>
+        <td><b>${k}</b><br><span style="font-size:11px;color:var(--muted)">div ${v.division}</span></td>
+        <td class="num">${fmtPct(v.observed_peak)}</td>
+        <td class="num">${fmtPct(v.predicted_peak)}</td>
+        <td class="num ${gap>0?'pos':'neg'}">${fmtPp(gap)}</td>
+        <td class="num">${v.n_industries}</td>
+      </tr>
+    `);
+  }
+
+  // ── Contributors charts ──────────────────────────────────────────────────
+  function contribChart(canvasId, divKey, color) {
+    const info = obs.cpi_bridge.by_division[divKey];
+    if (!info) return;
+    const top = info.top_contributors.slice(0, 8);
+    new Chart(document.getElementById(canvasId), {
+      type: 'bar',
+      data: {
+        labels: top.map(c => c.code),
+        datasets: [{
+          label: 'Contribution to division, pp',
+          data: top.map(c => (c.contribution_peak ?? 0) * 100),
+          backgroundColor: color,
+        }],
+      },
+      options: {
+        indexAxis: 'y',
+        responsive: true, maintainAspectRatio: false,
+        scales: { x: { title: { display: true, text: 'Contribution to division peak (pp)' } } },
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            callbacks: {
+              afterLabel: (ctx) => {
+                const c = top[ctx.dataIndex];
+                return `share of div: ${(c.share_of_div*100).toFixed(1)}%\n`
+                     + `industry PPI peak: ${fmtPct(c.ppi_peak)}`;
+              },
+            },
+          },
+        },
+      },
+    });
+  }
+  contribChart('chart-contrib-energy', '04.5', '#a32c2c');
+  contribChart('chart-contrib-food',   '01',   '#1f6b3b');
+
+  // ── Industry table ───────────────────────────────────────────────────────
+  const ind = [...obs.industries].sort((a,b) => (b.direct_share||0) - (a.direct_share||0));
+  const ibody = document.querySelector('#industry-table tbody');
+  for (const r of ind.slice(0, 30)) {
+    const rhoPeak = r.rho_peak;
+    const rhoCls = (rhoPeak != null) ? (rhoPeak > 1 ? 'pos' : (rhoPeak < 0.5 ? 'neg' : '')) : '';
+    const aggLabel = {
+      'ons_aggregate': 'ONS agg',
+      'simple_mean':   'mean of components',
+      'single_series': 'single',
+    }[r.agg_method] || r.agg_method || '';
+    ibody.insertAdjacentHTML('beforeend', `
+      <tr>
+        <td>${r.code}</td>
+        <td style="font-size:12px;color:var(--muted)">${(r.name||'').replace(/\s+$/,'')}</td>
+        <td class="num">${r.direct_share != null ? (r.direct_share*100).toFixed(1)+'%' : '—'}</td>
+        <td class="num">${r.hh_share != null ? (r.hh_share*100).toFixed(1)+'%' : '—'}</td>
+        <td class="num pos">${fmtPct(r.obs_peak)}</td>
+        <td class="num ${rhoCls}">${rhoPeak != null ? rhoPeak.toFixed(2) : '—'}</td>
+        <td style="font-size:11px;color:var(--muted)">${aggLabel}</td>
+      </tr>
+    `);
+  }
+
+  // ── Footer run stamp ─────────────────────────────────────────────────────
+  document.getElementById('runstamp').textContent =
+    `Data window: ${obs.window.start} to ${obs.window.end}. `
+    + `${obs.industries.length} industries with observed PPI. `
+    + `${obs.cpi_bridge.by_division && Object.keys(obs.cpi_bridge.by_division).length || 0} CPI divisions in bridge.`;
+})();
+</script>
+
+</body>
+</html>

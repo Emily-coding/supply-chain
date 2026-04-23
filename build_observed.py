@@ -24,7 +24,26 @@ ROOT = Path(__file__).parent
 PPI  = ROOT / "data" / "ppi.xlsx"
 CPI  = ROOT / "data" / "mm23.xlsx"
 IRF  = ROOT / "data" / "irf.json"
+IOT_PRODUCT = ROOT / "data" / "iot2023product.xlsx"
+COICOP_CONV = ROOT / "data" / "coicopconverterforhouseholdconsumption19972020.xlsx"
 OUT  = ROOT / "data" / "observed.json"
+
+# Which year of the CPA → COICOP proportions to use. 2019 is the latest
+# pre-Covid year in the converter (2020 is distorted by lockdown shifts in
+# household spending patterns).
+COICOP_YEAR = 2019
+
+# The product-side workbook and the industry-side workbook use slightly different
+# spellings for a few IOAT codes. Normalise to the industry-side convention used
+# by build_irf.py / irf.json.
+PRODUCT_TO_INDUSTRY_CODE = {
+    "C11.01-6 & C12": "C1101T1106 & C12",
+    "C241_3":         "C241T243",
+    "H493_5":         "H493T495",
+    "F41, F42 & F43": "F41, F42  & F43",  # two spaces in industry version
+}
+def normalise_ioat_code(code: str) -> str:
+    return PRODUCT_TO_INDUSTRY_CODE.get(code, code)
 
 # Monthly data layout:
 # 2012-01 = r1014, so YYYY-MM = r1014 + (YYYY-2012)*12 + (MM-1)
@@ -114,6 +133,72 @@ CPA_TO_IOAT = {
     "D3511":"D351","D3512":"D351","D3513":"D351","D3514":"D351",
     "D3521":"D352_3","D3522":"D352_3","D3523":"D352_3",
 }
+
+# -----------------------------------------------------------------------------
+def load_ioat_weights():
+    """Per-IOAT total output (£ million) and household final consumption (£ million)
+    from the 2023 product-by-product analytical tables.
+
+    Returns {ioat_code: {'output_gbpm': float, 'hh_gbpm': float, 'hh_share': float,
+                         'name': str}}.
+
+    Output comes from IOT sheet r119 ('P1 Total output at basic prices'), one value
+    per CPA column. Household final consumption comes from Use BP PxI column 'P3 S14'
+    ('Final consumption expenditure by households'), one value per CPA row.
+
+    hh_share is the share of each IOAT product's gross output that goes directly
+    to UK household consumption (ignoring retail margins and re-export).
+    """
+    print("loading IOAT output + household weights from iot2023product.xlsx …", flush=True)
+    wb = openpyxl.load_workbook(IOT_PRODUCT, data_only=True)
+
+    # --- Total output per CPA (IOT r119) ---
+    ws = wb["IOT"]
+    out = {}
+    p1_row = 119
+    assert ws.cell(p1_row, 1).value == "P1", f"expected 'P1' at IOT!A{p1_row}"
+    for c in range(3, ws.max_column + 1):
+        code = ws.cell(4, c).value
+        if not isinstance(code, str) or not code.startswith("CPA_"):
+            continue
+        cpa = normalise_ioat_code(code[4:].strip())
+        name = ws.cell(5, c).value
+        val = ws.cell(p1_row, c).value
+        out[cpa] = {
+            "name": str(name).strip() if name else cpa,
+            "output_gbpm": float(val) if isinstance(val, (int, float)) else 0.0,
+        }
+
+    # --- Household final consumption per CPA (Use BP PxI, P3 S14 column) ---
+    ws = wb["Use BP PxI"]
+    hh_col = None
+    for c in range(2, ws.max_column + 1):
+        if ws.cell(4, c).value == "P3 S14":
+            hh_col = c
+            break
+    if hh_col is None:
+        raise SystemExit("could not locate 'P3 S14' column in Use BP PxI")
+    for r in range(7, ws.max_row + 1):
+        a = ws.cell(r, 1).value
+        if a == "_T":
+            break
+        if not isinstance(a, str) or not a.startswith("CPA_"):
+            continue
+        cpa = normalise_ioat_code(a[4:].strip())
+        val = ws.cell(r, hh_col).value
+        if cpa in out and isinstance(val, (int, float)):
+            out[cpa]["hh_gbpm"] = float(val)
+
+    # Fill missing hh with 0, compute share
+    for cpa, m in out.items():
+        m.setdefault("hh_gbpm", 0.0)
+        m["hh_share"] = (m["hh_gbpm"] / m["output_gbpm"]) if m["output_gbpm"] else 0.0
+
+    wb.close()
+    print(f"  {len(out)} IOAT codes; total output £{sum(m['output_gbpm'] for m in out.values())/1000:.1f}bn, "
+          f"household £{sum(m['hh_gbpm'] for m in out.values())/1000:.1f}bn")
+    return out
+
 
 # -----------------------------------------------------------------------------
 def parse_cpa(title: str):
@@ -260,27 +345,46 @@ def aggregate_by_ioat(series):
             continue
         buckets.setdefault(ioat, []).append(s)
 
-    # For each bucket compute average monthly index (base = mean of 2021 H1 = 100)
+    # For each bucket compute monthly index (base = 2021-01 = 100)
+    # Aggregation rule:
+    #   1. If any PPI series in the bucket has a CPA code that exactly matches
+    #      the IOAT bucket code, use only that series (it is ONS's own aggregate
+    #      at the bucket level — no within-bucket averaging error).
+    #   2. Otherwise, simple mean of the component 4-digit CPA series. This is
+    #      a fallback: true within-bucket weighting would require 4-digit CPA
+    #      output values, which are not published at this granularity in the
+    #      ONS IOAT (iot2023product gives weights only at IOAT-CPA level).
     out = {}
     for ioat, slist in buckets.items():
-        # Normalise each series to its own 2021-01 value, then average
+        exact = [s for s in slist if s["cpa"] == ioat]
+        if exact:
+            chosen = exact[:1]
+            method = "ons_aggregate"
+        else:
+            chosen = slist
+            method = "simple_mean" if len(slist) > 1 else "single_series"
         normed = []
-        for s in slist:
+        for s in chosen:
             v0 = s["values"].get("2021-01")
-            if not v0: continue
+            if not v0:
+                continue
             normed.append({m: v / v0 * 100 for m, v in s["values"].items()})
-        if not normed: continue
-        # Compute month-wise mean (handling missing)
+        if not normed:
+            continue
         all_months = set()
-        for n in normed: all_months.update(n.keys())
+        for n in normed:
+            all_months.update(n.keys())
         avg = {}
         for m in sorted(all_months):
             xs = [n[m] for n in normed if m in n]
-            if xs: avg[m] = sum(xs) / len(xs)
+            if xs:
+                avg[m] = sum(xs) / len(xs)
         out[ioat] = {
-            "index": avg,               # {month: PPI rebased to 2021-01 = 100}
-            "n_series": len(slist),
-            "cpas": [s["cpa"] for s in slist][:8],
+            "index": avg,
+            "n_series": len(chosen),
+            "n_series_total": len(slist),
+            "method": method,
+            "cpas": [s["cpa"] for s in chosen][:8],
         }
 
     if unmapped_cpa:
@@ -289,7 +393,183 @@ def aggregate_by_ioat(series):
     return out
 
 
-def compute_pass_through(ppi_by_ioat, irf_data):
+def load_coicop_map(year: int = COICOP_YEAR):
+    """CPA → COICOP proportion map from the ONS household-consumption converter.
+
+    Returns {ioat_code: {coicop_code: proportion}} where proportion is the share
+    of that CPA's household expenditure that falls into the given COICOP class
+    in the given calendar year. Proportions sum to 1 across COICOPs within a CPA.
+
+    COICOP codes are 3-digit (e.g. '01.1.4'). CPA codes are normalised to the
+    industry-side convention.
+    """
+    print(f"loading CPA → COICOP map (year {year}) …", flush=True)
+    wb = openpyxl.load_workbook(COICOP_CONV, data_only=True)
+    ws = wb["Table 2 - CPA to COICOP"]
+    year_col = 5 + (year - 1997)
+    got = ws.cell(7, year_col).value
+    assert str(got) == str(year), f"expected {year} at col {year_col}, got {got!r}"
+
+    result = {}
+    n_rows = 0
+    for r in range(8, ws.max_row + 1):
+        cpa = ws.cell(r, 1).value
+        coicop = ws.cell(r, 3).value
+        prop = ws.cell(r, year_col).value
+        if not isinstance(cpa, str) or not cpa.startswith("CPA_"):
+            continue
+        if not coicop or not isinstance(prop, (int, float)):
+            continue
+        code = normalise_ioat_code(cpa[4:].strip())
+        result.setdefault(code, {})[str(coicop).strip()] = float(prop)
+        n_rows += 1
+    wb.close()
+    print(f"  {n_rows} (CPA × COICOP) edges across {len(result)} CPAs")
+    return result
+
+
+def cpi_bridge(ppi_by_ioat, ioat_weights, coicop_map):
+    """Predicted CPI-division move from observed industry PPI moves.
+
+    For each observable industry j with a 2019 household-consumption share and
+    CPA→COICOP mapping:
+        hh_£[j, d]  =  hh_gbpm[j] × Σ{c ∈ d} prop[j, c]
+    where d is a 2-digit COICOP division (aggregating 3-digit classes).
+
+    Then for each division d:
+        ΔCPI_d  ≈  Σ_j (hh_£[j, d] / Σ_j hh_£[j, d]) × ΔPPI_j
+
+    Notes / caveats:
+      - This treats industry PPI as the price proxy for consumer-facing items.
+        Retail and transport margins between factory gate and shop shelf are
+        ignored; the bridge will under-state CPI moves to the extent that
+        margins themselves responded to the shock.
+      - Only goods-producing industries enter the bridge at this stage.
+        Services (COICOP transport, restaurants, recreation, comms, etc.) need
+        SPPI to be wired in before their contribution is representable.
+      - ρⱼ is NOT applied again here. ρ was used in compute_pass_through to
+        back out cost→price pass-through at the industry level; once we have
+        observed PPI moves, the bridge to CPI is just an expenditure-weighted
+        combination.
+    """
+    # Build per-industry peak ΔPPI in the shock window. Use obs_peak (max move
+    # since 2021-01), which matches the headline shock horizon ~2022-Q4.
+    # Drive this off ppi_by_ioat so energy industries (C19/D351/D352_3) are
+    # INCLUDED — the IRF builder strips them from irf.json but the CPI bridge
+    # very much needs them.
+    delta_ppi_peak = {}
+    delta_ppi_q8 = {}
+    for code, v in ppi_by_ioat.items():
+        idx = v["index"]
+        v0 = idx.get("2021-01")
+        if not v0:
+            continue
+        peak = max(idx.values())
+        delta_ppi_peak[code] = peak / v0 - 1
+        q8 = idx.get("2023-01")
+        if q8:
+            delta_ppi_q8[code] = q8 / v0 - 1
+
+    # For each (industry, COICOP division), household £ = hh_gbpm[j] × prop.
+    # We build at BOTH granularities: 2-digit division (01, 04, 07, ...) and
+    # 3-digit class (01.1, 04.5, 07.2, ...). CPI pulls from mm23.xlsx include
+    # 04.5 energy specifically, so 3-digit matching matters.
+    hh_by_jd = {}  # {(industry_code, coicop_key): £m}
+    for code in ppi_by_ioat:
+        hh = (ioat_weights.get(code) or {}).get("hh_gbpm") or 0.0
+        if not hh:
+            continue
+        props_raw = coicop_map.get(code, {})
+        agg = {}  # {coicop_key: proportion}
+        for c3, p in props_raw.items():
+            parts = c3.split(".")
+            div2 = parts[0].zfill(2)                      # e.g. '04'
+            agg[div2] = agg.get(div2, 0.0) + p
+            if len(parts) >= 2:
+                div3 = f"{div2}.{parts[1]}"               # e.g. '04.5'
+                agg[div3] = agg.get(div3, 0.0) + p
+        for key, p in agg.items():
+            hh_by_jd[(code, key)] = hh * p
+
+    # Collect divisions and the industries that contribute
+    divisions = {}  # {div: {"total_hh_gbpm": float, "contributions": [...]}}
+    for (code, div), hh in hh_by_jd.items():
+        d = divisions.setdefault(div, {"total_hh_gbpm": 0.0, "rows": []})
+        d["total_hh_gbpm"] += hh
+        d["rows"].append({"code": code, "hh_gbpm": hh})
+
+    # Now compute predicted ΔCPI per division
+    out = {}
+    for div, info in divisions.items():
+        tot = info["total_hh_gbpm"]
+        if not tot:
+            continue
+        pred_peak = 0.0
+        pred_q8   = 0.0
+        contribs = []
+        for c in info["rows"]:
+            code = c["code"]
+            share = c["hh_gbpm"] / tot
+            dp_peak = delta_ppi_peak.get(code)
+            dp_q8   = delta_ppi_q8.get(code)
+            if dp_peak is not None:
+                pred_peak += share * dp_peak
+            if dp_q8 is not None:
+                pred_q8 += share * dp_q8
+            contribs.append({
+                "code": code,
+                "hh_gbpm": c["hh_gbpm"],
+                "share_of_div": share,
+                "ppi_peak": dp_peak,
+                "ppi_q8":   dp_q8,
+                "contribution_peak": (share * dp_peak) if dp_peak is not None else None,
+            })
+        # Top-10 contributors by absolute contribution at peak
+        contribs.sort(key=lambda x: abs(x["contribution_peak"] or 0), reverse=True)
+        out[div] = {
+            "total_hh_gbpm": tot,
+            "n_industries": len(info["rows"]),
+            "coverage_pct_goods_only": True,  # services not yet in (task 3 SPPI)
+            "predicted_delta_peak": pred_peak,
+            "predicted_delta_q8":   pred_q8,
+            "top_contributors": contribs[:10],
+        }
+    return out
+
+
+def weighted_index(ppi_by_ioat, ioat_weights, include_codes=None):
+    """Cross-bucket output-weighted PPI index.
+
+    For each month, compute Σⱼ (wⱼ × PPIⱼ) / Σⱼ wⱼ over the IOAT buckets in
+    `include_codes` (default: all matched goods-producing buckets), where wⱼ is
+    gross output at basic prices from the 2023 IOAT. Returns {month: index}.
+
+    This is a proper output-weighted aggregate across industries — it is the
+    headline economy-wide move that simple-mean aggregation would bias.
+    """
+    if include_codes is None:
+        include_codes = set(ppi_by_ioat.keys()) & set(ioat_weights.keys())
+    else:
+        include_codes = set(include_codes) & set(ppi_by_ioat.keys()) & set(ioat_weights.keys())
+    # Collect all months in common
+    all_months = set()
+    for code in include_codes:
+        all_months.update(ppi_by_ioat[code]["index"].keys())
+    result = {}
+    for m in sorted(all_months):
+        num, den = 0.0, 0.0
+        for code in include_codes:
+            w = ioat_weights[code]["output_gbpm"]
+            v = ppi_by_ioat[code]["index"].get(m)
+            if v is not None and w:
+                num += w * v
+                den += w
+        if den:
+            result[m] = num / den
+    return result, sorted(include_codes)
+
+
+def compute_pass_through(ppi_by_ioat, irf_data, ioat_weights):
     """For each industry, compute observed ρ and compare to the Leontief prediction."""
     # Energy shock from PPI
     if "C19" not in ppi_by_ioat or "D351" not in ppi_by_ioat or "D352_3" not in ppi_by_ioat:
@@ -321,6 +601,7 @@ def compute_pass_through(ppi_by_ioat, irf_data):
         if code not in ppi_by_ioat:
             continue
         ppi = ppi_by_ioat[code]["index"]
+        agg_method = ppi_by_ioat[code]["method"]
         v0 = ppi.get("2021-01", 100.0)
         # Observed industry PPI moves at key horizons
         obs_q1  = (ppi.get("2021-04", None)/v0 - 1) if ppi.get("2021-04") else None
@@ -359,10 +640,16 @@ def compute_pass_through(ppi_by_ioat, irf_data):
         rho_direct = (obs_q8 / theor_direct) if (obs_q8 is not None and theor_direct) else None
         rho_peak   = (obs_peak / theor_full) if (theor_full) else None
 
+        w = ioat_weights.get(code, {})
         rows_out.append({
             "code": code,
             "name": rec["name"],
             "n_ppi_series": ppi_by_ioat[code]["n_series"],
+            "n_ppi_series_total": ppi_by_ioat[code].get("n_series_total", ppi_by_ioat[code]["n_series"]),
+            "agg_method": agg_method,
+            "output_gbpm": w.get("output_gbpm"),
+            "hh_gbpm":     w.get("hh_gbpm"),
+            "hh_share":    w.get("hh_share"),
             "direct_share": rec["direct_share"],
             "theor_direct_22": theor_direct,
             "theor_full_22":   theor_full,
@@ -385,13 +672,62 @@ def compute_pass_through(ppi_by_ioat, irf_data):
 def main():
     irf = json.loads(IRF.read_text())
 
+    ioat_weights = load_ioat_weights()
+
     ppi_series = load_ppi()
     ppi_by_ioat = aggregate_by_ioat(ppi_series)
     print(f"  {len(ppi_by_ioat)} IOAT industries matched to PPI series")
 
+    # How many buckets got the clean ONS-aggregate treatment vs mean fallback?
+    by_method = {}
+    for code, v in ppi_by_ioat.items():
+        by_method[v["method"]] = by_method.get(v["method"], 0) + 1
+    print(f"  aggregation method: {by_method}")
+
     cpi_series = load_cpi()
 
-    rows, energy_shock = compute_pass_through(ppi_by_ioat, irf)
+    rows, energy_shock = compute_pass_through(ppi_by_ioat, irf, ioat_weights)
+
+    # Output-weighted headline PPI over all matched goods-producing buckets
+    # (i.e. everything in our PPI panel). This is the aggregate the simple
+    # mean would bias; used as a sanity check against ONS's own published
+    # headline PPI.
+    headline_ppi, headline_codes = weighted_index(ppi_by_ioat, ioat_weights)
+
+    # CPI bridge: observed industry PPI moves → predicted CPI-division moves
+    # via 2019 CPA → COICOP household-expenditure mapping.
+    coicop_map = load_coicop_map(COICOP_YEAR)
+    cpi_predicted = cpi_bridge(ppi_by_ioat, ioat_weights, coicop_map)
+
+    # For each CPI division we have observed series for, compare predicted vs observed.
+    CPI_KEY_TO_DIV = {
+        "food":        "01",
+        "energy":      "04.5",  # Electricity, gas and other fuels
+        "housing":     "04",
+        "transport":   "07",
+        "restaurants": "11",
+    }
+    def obs_peak_for_div(key):
+        s = cpi_series.get(key)
+        if not s: return None
+        vals = s["values"]
+        v0 = vals.get("2021-01")
+        if not v0: return None
+        peak = max(vals.values())
+        return peak / v0 - 1
+    cpi_comparison = {}
+    for key, div in CPI_KEY_TO_DIV.items():
+        if div not in cpi_predicted:
+            continue
+        cpi_comparison[key] = {
+            "division": div,
+            "title": cpi_series[key]["title"] if key in cpi_series else None,
+            "observed_peak":  obs_peak_for_div(key),
+            "predicted_peak": cpi_predicted[div]["predicted_delta_peak"],
+            "predicted_q8":   cpi_predicted[div]["predicted_delta_q8"],
+            "n_industries":   cpi_predicted[div]["n_industries"],
+            "hh_gbpm":        cpi_predicted[div]["total_hh_gbpm"],
+        }
 
     # Assemble output
     result = {
@@ -406,15 +742,42 @@ def main():
                                    for m,val in v["values"].items() if v["values"].get("2021-01")}
                } for k,v in cpi_series.items()},
         "ppi_index_by_ioat": {k: v["index"] for k, v in ppi_by_ioat.items()},
+        "ppi_weighted_headline": {
+            "index": headline_ppi,
+            "basis": "output_gbpm from IOT!P1 of iot2023product.xlsx (2023 ONS IOAT)",
+            "n_industries": len(headline_codes),
+            "industries": headline_codes,
+        },
+        "cpi_bridge": {
+            "year_for_weights": COICOP_YEAR,
+            "source": "coicopconverterforhouseholdconsumption19972020.xlsx Table 2 (CPA → COICOP proportions); hh_gbpm from iot2023product.xlsx Use BP PxI P3 S14",
+            "caveat": (
+                "Goods-producing industries only (services PPI not yet wired in). "
+                "Retail/transport margins between factory gate and shop shelf are "
+                "ignored. Predicted values are thus a LOWER BOUND on CPI response "
+                "to the extent that margins absorbed/compounded the shock, and are "
+                "INCOMPLETE for services-heavy divisions (04 housing services, 07 "
+                "transport, 09 recreation, 11 restaurants) until SPPI is added."
+            ),
+            "by_division": cpi_predicted,
+            "comparison_observed_vs_predicted": cpi_comparison,
+        },
         "notes": (
-            "Observed monthly PPI Output Domestic indices (ONS MM22, release "
-            "2026-04-22) aggregated to the 101 IOAT industries of the 2023 "
-            "analytical table, rebased to 2021-01 = 100. Empirical pass-through "
-            "ρ_direct = obs_q8 / (direct energy share × avg-2022 energy shock)."
+            "Observed monthly PPI Output Domestic indices aggregated to the 101 "
+            "IOAT industries of the 2023 analytical table, rebased to 2021-01 = "
+            "100. Empirical pass-through ρ_direct = obs_q8 / (direct energy "
+            "share × avg-2022 energy shock). Cross-bucket aggregates "
+            "(ppi_weighted_headline) use ONS 2023 IOAT gross-output weights "
+            "(iot2023product.xlsx, IOT!P1). Within a bucket (multiple 4-digit "
+            "CPA PPI series feeding one IOAT industry) we use the ONS-published "
+            "aggregate at the bucket level when available, otherwise simple mean "
+            "— true 4-digit weighting is not possible from the ONS IOAT, whose "
+            "finest published weight is the IOAT-CPA level itself."
         ),
     }
     OUT.write_text(json.dumps(result, indent=1))
-    print(f"wrote {OUT}  ({len(rows)} industries, {len(cpi_series)} CPI series)")
+    print(f"wrote {OUT}  ({len(rows)} industries, {len(cpi_series)} CPI series, "
+          f"{len(headline_codes)} in weighted headline)")
 
 
 if __name__ == "__main__":
