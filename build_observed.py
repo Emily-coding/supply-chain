@@ -22,6 +22,7 @@ import openpyxl
 
 ROOT = Path(__file__).parent
 PPI  = ROOT / "data" / "ppi.xlsx"
+SPPI = ROOT / "data" / "sppi.xlsx"
 CPI  = ROOT / "data" / "mm23.xlsx"
 IRF  = ROOT / "data" / "irf.json"
 IOT_PRODUCT = ROOT / "data" / "iot2023product.xlsx"
@@ -251,6 +252,176 @@ def load_ppi():
 
     wb.close()
     return series
+
+
+# -----------------------------------------------------------------------------
+# SPPI: services producer prices are published QUARTERLY, not monthly. We hold
+# each quarterly value flat across the three months of its quarter so services
+# and goods live in the same monthly frame for the CPI bridge.
+#
+# SPPI CPA codes align with SIC but don't necessarily match IOAT bucket codes
+# 1:1, so the map below is hand-coded. For an IOAT bucket it picks either:
+#   - a single exact-match SPPI series (cleanest), or
+#   - a set of SPPI series that together cover the bucket's SIC membership.
+# IOAT codes with no SPPI coverage (owner-occupier rent, public admin, health,
+# education at CPI 10, veterinary, R&D, travel agencies, cultural/recreational
+# services, construction output which ONS measures via input indices) are left
+# unmapped and stay missing from ppi_by_ioat; they remain as gaps in the bridge.
+SPPI_IOAT_TO_CPAS = {
+    # Transport & storage
+    "H491_2":    ["H491", "H492"],        # rail passenger + freight
+    "H493T495":  ["H493", "H494"],        # other land passenger + road freight (H495 pipelines not in SPPI)
+    "H50":       ["H50"],
+    "H51":       ["H51"],
+    "H52":       ["H52"],
+    "H53":       ["H53"],
+    # Accommodation & food
+    "I55":       ["I55"],
+    "I56":       ["I56"],
+    # Information & communication
+    "J58":       ["J58"],
+    "J59 & J60": ["J59"],                  # J60 broadcasting not in SPPI
+    "J61":       ["J61"],
+    "J62":       ["J62"],
+    "J63":       ["J63"],
+    # Finance
+    "K64":       ["K64"],
+    # Professional
+    "M691":      ["M691"],
+    "M692":      ["M692"],
+    "M70":       ["M70"],
+    "M71":       ["M71"],
+    "M73":       ["M73"],
+    "M74":       ["M74"],
+    # Admin & support
+    "N77":       ["N77"],
+    "N78":       ["N78"],
+    "N80":       ["N80"],
+    "N81":       ["N81"],
+    "N82":       ["N82"],
+    # Education and other services
+    "P85":       ["P85"],
+    "S96":       ["S96"],
+    # Repair of motor vehicles — IOAT G45 also covers wholesale of parts; SPPI
+    # only has G452 (repair). This is a partial coverage; flagged in note.
+    "G45":       ["G452"],
+}
+
+
+def _sppi_row(y, q):
+    # SPPI row 38 is 1996 Q1
+    return 38 + (y - 1996) * 4 + (q - 1)
+
+
+def load_sppi():
+    """Extract SPPI OUTPUT DOMESTIC quarterly indices 2021 Q1 .. 2024 Q4 and
+    expand to monthly by holding each quarterly value flat across its three
+    months. Returns list of {cpa, values: {YYYY-MM: float}, title, col}.
+    """
+    print(f"loading SPPI …", flush=True); t0 = time.time()
+    wb = openpyxl.load_workbook(SPPI, data_only=True)
+    ws = wb["data"]
+    print(f"  loaded in {time.time()-t0:.1f}s", flush=True)
+
+    quarters = [(y, q, _sppi_row(y, q)) for y in range(2021, 2025) for q in range(1, 5)]
+
+    series = []
+    for c in range(2, ws.max_column + 1):
+        t = ws.cell(1, c).value
+        if not isinstance(t, str):
+            continue
+        # Both "SPPI INDEX OUTPUT DOMESTIC - " (plain) and "… GROUP - " prefixes
+        # exist. The GROUP variants are section-level aggregates we don't need.
+        if not t.startswith("SPPI INDEX OUTPUT DOMESTIC - "):
+            continue
+        cpa = parse_cpa(t)
+        if cpa is None:
+            continue
+        qvals = {}
+        for y, q, r in quarters:
+            v = ws.cell(r, c).value
+            if isinstance(v, (int, float)):
+                qvals[(y, q)] = float(v)
+        # Expand to monthly: every month in a quarter takes its quarter's value
+        vals = {}
+        for (y, q), v in qvals.items():
+            for m in range(1, 4):
+                mm = (q - 1) * 3 + m
+                vals[f"{y}-{mm:02d}"] = v
+        if vals:
+            series.append({"col": c, "cpa": cpa, "title": t, "values": vals})
+    wb.close()
+    print(f"  {len(series)} SPPI OUTPUT DOMESTIC series")
+    return series
+
+
+def aggregate_sppi_by_ioat(series):
+    """Bucket SPPI series into IOAT industries per SPPI_IOAT_TO_CPAS.
+    Matches use CPA-prefix: an SPPI series whose cpa begins with one of the
+    target CPAs for the IOAT bucket is a member. Prefer an exact match (the
+    single ONS aggregate at the bucket level) over averaging components.
+    """
+    # Index SPPI series by CPA
+    by_cpa = {}
+    for s in series:
+        by_cpa.setdefault(s["cpa"], []).append(s)
+
+    out = {}
+    for ioat, target_cpas in SPPI_IOAT_TO_CPAS.items():
+        chosen = []
+        method = None
+        # Try exact match first (e.g. IOAT H50 → SPPI H50)
+        for tcpa in target_cpas:
+            if tcpa in by_cpa:
+                chosen = by_cpa[tcpa][:1]
+                method = "sppi_exact"
+                break
+        if not chosen:
+            # Fall back to prefix-matched components
+            comps = []
+            for s in series:
+                for tcpa in target_cpas:
+                    if s["cpa"].startswith(tcpa):
+                        comps.append(s)
+                        break
+            if not comps:
+                continue
+            # Deduplicate by CPA, preferring shortest codes (more aggregate)
+            comps.sort(key=lambda s: len(s["cpa"]))
+            seen = set()
+            dedup = []
+            for s in comps:
+                if s["cpa"] not in seen:
+                    seen.add(s["cpa"])
+                    dedup.append(s)
+            chosen = dedup
+            method = "sppi_components_mean"
+
+        # Normalise each component to 2021-01 = 100 and mean across the bucket
+        normed = []
+        for s in chosen:
+            v0 = s["values"].get("2021-01")
+            if not v0:
+                continue
+            normed.append({m: v / v0 * 100 for m, v in s["values"].items()})
+        if not normed:
+            continue
+        all_months = set()
+        for n in normed:
+            all_months.update(n.keys())
+        avg = {}
+        for m in sorted(all_months):
+            xs = [n[m] for n in normed if m in n]
+            if xs:
+                avg[m] = sum(xs) / len(xs)
+        out[ioat] = {
+            "index": avg,
+            "n_series": len(chosen),
+            "n_series_total": len(chosen),
+            "method": method,
+            "cpas": [s["cpa"] for s in chosen][:8],
+        }
+    return out
 
 
 def load_cpi():
@@ -678,6 +849,20 @@ def main():
     ppi_by_ioat = aggregate_by_ioat(ppi_series)
     print(f"  {len(ppi_by_ioat)} IOAT industries matched to PPI series")
 
+    # Services PPI: quarterly, held flat across months, merged into the same
+    # monthly dict. Services IOAT buckets don't overlap goods ones so there's
+    # no collision.
+    sppi_series = load_sppi()
+    sppi_by_ioat = aggregate_sppi_by_ioat(sppi_series)
+    overlap = set(ppi_by_ioat) & set(sppi_by_ioat)
+    if overlap:
+        print(f"  warning: PPI and SPPI both covered {sorted(overlap)}; keeping PPI")
+        for c in overlap:
+            del sppi_by_ioat[c]
+    ppi_by_ioat.update(sppi_by_ioat)
+    print(f"  {len(sppi_by_ioat)} services industries added; "
+          f"{len(ppi_by_ioat)} IOAT industries total with price series")
+
     # How many buckets got the clean ONS-aggregate treatment vs mean fallback?
     by_method = {}
     for code, v in ppi_by_ioat.items():
@@ -752,27 +937,33 @@ def main():
             "year_for_weights": COICOP_YEAR,
             "source": "coicopconverterforhouseholdconsumption19972020.xlsx Table 2 (CPA → COICOP proportions); hh_gbpm from iot2023product.xlsx Use BP PxI P3 S14",
             "caveat": (
-                "Goods-producing industries only (services PPI not yet wired in). "
-                "Retail/transport margins between factory gate and shop shelf are "
-                "ignored. Predicted values are thus a LOWER BOUND on CPI response "
-                "to the extent that margins absorbed/compounded the shock, and are "
-                "INCOMPLETE for services-heavy divisions (04 housing services, 07 "
-                "transport, 09 recreation, 11 restaurants) until SPPI is added."
+                "Goods from ONS PPI; services from ONS SPPI (quarterly, held flat "
+                "across months). Retail/transport margins between factory gate and "
+                "shop shelf are ignored. SPPI does not cover every services "
+                "industry: owner-occupiers' housing (imputed rent), health, "
+                "education retail, R&D, public admin, travel agencies, cultural/"
+                "recreational services, and construction output are all still "
+                "missing from the bridge — divisions with large exposure to these "
+                "(04 housing, 10 education, 12 misc) will still over- or under-"
+                "predict accordingly."
             ),
             "by_division": cpi_predicted,
             "comparison_observed_vs_predicted": cpi_comparison,
         },
         "notes": (
-            "Observed monthly PPI Output Domestic indices aggregated to the 101 "
-            "IOAT industries of the 2023 analytical table, rebased to 2021-01 = "
-            "100. Empirical pass-through ρ_direct = obs_q8 / (direct energy "
-            "share × avg-2022 energy shock). Cross-bucket aggregates "
-            "(ppi_weighted_headline) use ONS 2023 IOAT gross-output weights "
-            "(iot2023product.xlsx, IOT!P1). Within a bucket (multiple 4-digit "
-            "CPA PPI series feeding one IOAT industry) we use the ONS-published "
-            "aggregate at the bucket level when available, otherwise simple mean "
-            "— true 4-digit weighting is not possible from the ONS IOAT, whose "
-            "finest published weight is the IOAT-CPA level itself."
+            "Observed price indices aggregated to the 101 IOAT industries of "
+            "the 2023 analytical table, rebased to 2021-01 = 100. Goods come "
+            "from ONS monthly PPI Output Domestic (MM22); services from ONS "
+            "SPPI Output Domestic, which is quarterly — each quarterly value "
+            "is held flat across the 3 months in its quarter. Empirical "
+            "pass-through ρ_direct = obs_q8 / (direct energy share × avg-2022 "
+            "energy shock). Cross-bucket aggregates (ppi_weighted_headline) "
+            "use ONS 2023 IOAT gross-output weights (iot2023product.xlsx, "
+            "IOT!P1). Within a bucket (multiple 4-digit CPA series feeding one "
+            "IOAT industry) we use the ONS-published aggregate at the bucket "
+            "level when available, otherwise simple mean — true 4-digit "
+            "weighting is not possible from the ONS IOAT, whose finest "
+            "published weight is the IOAT-CPA level itself."
         ),
     }
     OUT.write_text(json.dumps(result, indent=1))

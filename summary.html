@@ -217,7 +217,7 @@
 <section id="caveats">
   <h2>Caveats</h2>
   <ul class="caveats">
-    <li><b>Services not yet wired in.</b> CPI divisions with heavy services content (04 housing, 07 transport, 09 recreation, 11 restaurants) are over-predicted because the bridge currently only sees goods PPI. Wiring SPPI is the next task.</li>
+    <li><b>SPPI coverage is incomplete.</b> 27 services industries are in via ONS SPPI (quarterly, held flat across months). Still missing: owner-occupiers' housing (imputed rent — dominates CPI 04 housing weight), health, education retail, R&D, travel agencies, cultural/recreational services, public admin, construction output. CPI division 04 is still over-predicted for this reason — the sub-divisions 04.3/04.4/04.5 themselves are fine.</li>
     <li><b>Retail / transport margins ignored.</b> The bridge treats factory-gate PPI as the consumer-facing price. Any margin change between 2021 and 2024 shows up as "gap" rather than being modelled.</li>
     <li><b>Within-bucket 4-digit CPA weights are not available.</b> Where an IOAT bucket contains multiple 4-digit CPA PPI series and ONS does not publish a bucket-level aggregate, we use simple mean across components. 28/51 buckets use the ONS aggregate directly; 20 fall back to simple mean.</li>
     <li><b>N=1 shock.</b> The 2022 episode is a single correlated gas/oil/electricity event; ρ estimates are conditional on that shock, not a structural parameter. Co-moving sterling depreciation and post-Covid demand are confounders.</li>
