@@ -27,6 +27,7 @@ CPI  = ROOT / "data" / "mm23.xlsx"
 IRF  = ROOT / "data" / "irf.json"
 IOT_PRODUCT = ROOT / "data" / "iot2023product.xlsx"
 COICOP_CONV = ROOT / "data" / "coicopconverterforhouseholdconsumption19972020.xlsx"
+OFGEM_GAS   = ROOT / "data" / "gas-price-ofgem.xls"  # actually HTML despite .xls extension
 OUT  = ROOT / "data" / "observed.json"
 
 # Which year of the CPA → COICOP proportions to use. 2019 is the latest
@@ -424,6 +425,43 @@ def aggregate_sppi_by_ioat(series):
     return out
 
 
+def load_ofgem_gas():
+    """Parse Ofgem monthly NBP day-ahead gas price (p/therm).
+    File is served with an .xls extension but is actually an HTML table.
+    Returns (monthly_series_dict, info_dict).
+    """
+    print("loading Ofgem NBP day-ahead gas …", flush=True)
+    text = OFGEM_GAS.read_text(encoding="utf-8-sig")
+    pairs = re.findall(
+        r'<th[^>]*>(\d{4}-\d{2}-\d{2})[^<]*</th><td[^>]*>([0-9.]+)</td>',
+        text,
+    )
+    series = {}
+    for date, price in pairs:
+        series[date[:7]] = float(price)
+    v0 = series.get("2021-01")
+    if v0 is None:
+        raise SystemExit("Ofgem gas series: no 2021-01 value")
+    window = {m: v for m, v in series.items() if "2021-01" <= m <= "2024-12"}
+    peak_m = max(window, key=lambda m: window[m])
+    peak_v = window[peak_m]
+    avg_2022 = sum(v for m, v in window.items() if m.startswith("2022-")) / 12
+    info = {
+        "unit": "p/therm",
+        "source": "Ofgem wholesale market indicators (NBP day-ahead, monthly average)",
+        "p0_2021_01": v0,
+        "peak_month": peak_m,
+        "peak_value": peak_v,
+        "peak_shock": peak_v / v0 - 1,
+        "avg_2022_shock": avg_2022 / v0 - 1,
+        "avg_2022_value": avg_2022,
+    }
+    print(f"  {len(window)} monthly obs, 2021-01={v0:.1f} p/therm, "
+          f"peak={peak_m} @ {peak_v:.0f} ({info['peak_shock']*100:+.0f}%), "
+          f"avg-2022 shock {info['avg_2022_shock']*100:+.0f}%")
+    return window, info
+
+
 def load_cpi():
     """Extract monthly CPI ALL-ITEMS and main divisions, 2021-01 .. 2024-12."""
     print(f"loading CPI …", flush=True); t0 = time.time()
@@ -740,7 +778,7 @@ def weighted_index(ppi_by_ioat, ioat_weights, include_codes=None):
     return result, sorted(include_codes)
 
 
-def compute_pass_through(ppi_by_ioat, irf_data, ioat_weights):
+def compute_pass_through(ppi_by_ioat, irf_data, ioat_weights, external_shocks=None):
     """For each industry, compute observed ρ and compare to the Leontief prediction."""
     # Energy shock from PPI
     if "C19" not in ppi_by_ioat or "D351" not in ppi_by_ioat or "D352_3" not in ppi_by_ioat:
@@ -800,6 +838,18 @@ def compute_pass_through(ppi_by_ioat, irf_data, ioat_weights):
         avg_shock = (s_gas + s_elec + s_oil) / 3.0
         theor_full = (rec["unit_full_lr"] / 0.10) * avg_shock if avg_shock else 0.0
 
+        # External-shock variant (e.g. Ofgem wholesale gas replacing UK D352_3 PPI).
+        # Only gas is overridden at this stage; electricity and oil stay internal.
+        theor_full_ext = theor_direct_ext = None
+        avg_shock_ext = None
+        if external_shocks:
+            s_gas_e  = external_shocks.get("D352_3", {}).get("avg_2022_shock", s_gas)
+            s_elec_e = external_shocks.get("D351",   {}).get("avg_2022_shock", s_elec)
+            s_oil_e  = external_shocks.get("C19",    {}).get("avg_2022_shock", s_oil)
+            theor_direct_ext = a_gas*s_gas_e + a_elec*s_elec_e + a_oil*s_oil_e
+            avg_shock_ext = (s_gas_e + s_elec_e + s_oil_e) / 3.0
+            theor_full_ext = (rec["unit_full_lr"] / 0.10) * avg_shock_ext if avg_shock_ext else 0.0
+
         # Empirical pass-through: observed ÷ Leontief-full theoretical.
         # rho = 1 means the PPI moved exactly as the Leontief model (with full
         # pass-through) predicts from the observed energy shock alone.
@@ -810,6 +860,8 @@ def compute_pass_through(ppi_by_ioat, irf_data, ioat_weights):
         rho_full   = (obs_q8 / theor_full)   if (obs_q8 is not None and theor_full)   else None
         rho_direct = (obs_q8 / theor_direct) if (obs_q8 is not None and theor_direct) else None
         rho_peak   = (obs_peak / theor_full) if (theor_full) else None
+        rho_peak_ext = (obs_peak / theor_full_ext) if (theor_full_ext) else None
+        rho_full_q8_ext = (obs_q8 / theor_full_ext) if (obs_q8 is not None and theor_full_ext) else None
 
         w = ioat_weights.get(code, {})
         rows_out.append({
@@ -824,6 +876,8 @@ def compute_pass_through(ppi_by_ioat, irf_data, ioat_weights):
             "direct_share": rec["direct_share"],
             "theor_direct_22": theor_direct,
             "theor_full_22":   theor_full,
+            "theor_direct_ext": theor_direct_ext,
+            "theor_full_ext":   theor_full_ext,
             "obs_q1":   obs_q1,
             "obs_q4":   obs_q4,
             "obs_q8":   obs_q8,
@@ -833,6 +887,8 @@ def compute_pass_through(ppi_by_ioat, irf_data, ioat_weights):
             "rho_direct_q8": rho_direct,
             "rho_full_q8":   rho_full,
             "rho_peak":      rho_peak,
+            "rho_full_q8_ext": rho_full_q8_ext,
+            "rho_peak_ext":    rho_peak_ext,
             "rho_assumed":   rec["rho"],
         })
 
@@ -871,7 +927,22 @@ def main():
 
     cpi_series = load_cpi()
 
-    rows, energy_shock = compute_pass_through(ppi_by_ioat, irf, ioat_weights)
+    # External wholesale shocks — currently Ofgem NBP day-ahead for gas only.
+    ofgem_gas, ofgem_info = load_ofgem_gas()
+    external_shocks = {
+        "D352_3": {
+            "avg_2022_shock": ofgem_info["avg_2022_shock"],
+            "peak_shock":     ofgem_info["peak_shock"],
+            "peak_month":     ofgem_info["peak_month"],
+            "series_monthly": ofgem_gas,
+            "source":         ofgem_info["source"],
+            "unit":           ofgem_info["unit"],
+        },
+    }
+
+    rows, energy_shock = compute_pass_through(
+        ppi_by_ioat, irf, ioat_weights, external_shocks=external_shocks,
+    )
 
     # Output-weighted headline PPI over all matched goods-producing buckets
     # (i.e. everything in our PPI panel). This is the aggregate the simple
@@ -920,6 +991,9 @@ def main():
         "shock_window": {"start":"2021-01", "peak_end": max(energy_shock[k]['peak_month'] for k in energy_shock)},
         "energy_ppi": {k: {kk:vv for kk,vv in v.items() if kk!='peak_month'} |
                            {"peak_month": v["peak_month"]} for k,v in energy_shock.items()},
+        "energy_external": {
+            "gas_nbp_day_ahead": ofgem_info,
+        },
         "industries": rows,
         "cpi": {k: {
                     "title":v["title"], "cdid":v["cdid"],

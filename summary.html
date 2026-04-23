@@ -60,9 +60,10 @@
   h2 + p.lede { color: var(--muted); font-size: 14px; margin: 0 0 18px; }
   .grid { display: grid; gap: 16px; }
   .grid.c4 { grid-template-columns: repeat(4, 1fr); }
+  .grid.c5 { grid-template-columns: repeat(5, 1fr); }
   .grid.c2 { grid-template-columns: repeat(2, 1fr); }
   @media (max-width: 780px) {
-    .grid.c4 { grid-template-columns: repeat(2, 1fr); }
+    .grid.c4, .grid.c5 { grid-template-columns: repeat(2, 1fr); }
     .grid.c2 { grid-template-columns: 1fr; }
   }
   .card {
@@ -135,6 +136,19 @@
     color: var(--muted);
   }
   footer code { font-size: 11px; background: #eee; padding: 1px 4px; border-radius: 2px; }
+  pre.eq {
+    background: #fff;
+    border: 1px solid var(--line);
+    border-left: 3px solid var(--accent2);
+    padding: 12px 16px;
+    margin: 10px 0;
+    font-family: "SF Mono", Monaco, Consolas, monospace;
+    font-size: 14px;
+    overflow-x: auto;
+    white-space: pre;
+  }
+  #method p, #glossary p { font-size: 14px; }
+  #method code, #glossary code { background:#eee; padding: 1px 4px; border-radius: 2px; font-size: 12px; }
 </style>
 </head>
 <body>
@@ -151,9 +165,13 @@
 
 <!-- Energy shock -->
 <section id="energy">
-  <h2>Wholesale-ish energy shock, 2021 → peak</h2>
-  <p class="lede">UK PPI for the three energy-producing industries. The Leontief propagation elsewhere in the model assumes these are the exogenous cost drivers.</p>
-  <div class="grid c4" id="energy-cards"></div>
+  <h2>Energy shock, 2021 → peak</h2>
+  <p class="lede">Three UK-PPI-based "internal" shocks are the default; <b>Ofgem NBP day-ahead gas</b> is our first external wholesale benchmark and it moved roughly 2.7× further than D352_3 PPI at peak. The gap is the retail/regulatory smoothing that sits between wholesale and the PPI of UK energy-distribution industries.</p>
+  <div class="grid c5" id="energy-cards"></div>
+  <div class="card" id="ext-callout" style="margin-top:14px;background:#fff7ea;border-color:#d9a05b">
+    <p class="label" style="color:#8a5a10">External vs internal gas shock</p>
+    <p id="ext-callout-body" style="margin:6px 0 0;font-size:14px"></p>
+  </div>
 </section>
 
 <!-- PPI trajectories -->
@@ -205,11 +223,71 @@
           <th>HH share of output</th>
           <th>Obs peak PPI</th>
           <th>ρ<sub>peak</sub></th>
+          <th>ρ<sub>peak</sub> (ext)</th>
           <th>Agg method</th>
         </tr>
       </thead>
       <tbody></tbody>
     </table>
+  </div>
+</section>
+
+<!-- Method -->
+<section id="method">
+  <h2>What the shock is, and what the numbers mean</h2>
+  <p class="lede">Three steps: (1) define the energy shock, (2) propagate it through the 2023 IxI input–output matrix to get a predicted per-industry producer-price move, (3) bridge the per-industry PPI moves to CPI using household-expenditure shares. We compare each step to what actually happened in 2021–24.</p>
+
+  <h3 style="margin-top:22px;font-size:16px">Step 1 — the shock</h3>
+  <p>Let <i>s<sub>k</sub></i> be the percent change in the wholesale price of energy product <i>k</i> between 2021-01 and its 2022 peak (or average). We use two variants:</p>
+  <ul>
+    <li><b>Internal shock (default)</b>: <i>s<sub>k</sub></i> = ONS PPI Output Domestic for <i>k</i> ∈ {C19 refined petroleum, D351 electricity, D352_3 gas}. Peak moves ≈ +176 / +111 / +186%. This is <i>downstream</i> of wholesale and includes any retail/regulatory smoothing.</li>
+    <li><b>External shock (gas only, experimental)</b>: <i>s</i><sub>D352_3</sub> = Ofgem monthly NBP day-ahead gas price. Peak +503% (Aug 2022). Electricity and oil kept internal for now.</li>
+  </ul>
+
+  <h3 style="margin-top:22px;font-size:16px">Step 2 — Leontief propagation</h3>
+  <p>The 2023 ONS industry-by-industry matrix <i>A</i> gives every industry's input cost structure. Partition it so energy industries are exogenous:</p>
+  <pre class="eq">Δp<sub>R</sub>  =  (I − A<sub>RR</sub>ᵀ)<sup>−1</sup> · A<sub>ER</sub>ᵀ · Δp<sub>E</sub></pre>
+  <p>where <i>p<sub>R</sub></i> are non-energy industry prices and <i>p<sub>E</sub></i> are the energy shocks. The closed-form solution is the <b>long-run full-pass-through upper bound</b>: every industry prices every £1 of extra energy cost straight into its output. In the code this is emitted as <code>theor_full_22</code> (internal shock) and <code>theor_full_ext</code> (external-gas shock).</p>
+  <p>Empirical pass-through is then:</p>
+  <pre class="eq">ρ<sub>peak,j</sub>  =  Δ_observed_peak<sub>j</sub>  /  theor_full<sub>j</sub></pre>
+  <p>ρ &lt; 1 ⇒ firm absorbed some of the shock in margin or lost volume; ρ ≈ 1 ⇒ full pass-through; ρ &gt; 1 ⇒ either "excess pass-through" under market power (Lafrogne-Joussier–Martin–Méjean 2023) or other cost shocks (wages, sterling, non-energy inputs) also lifted the price. The columns <code>ρ_peak</code> and <code>ρ_peak (ext)</code> in the industry table give the two variants.</p>
+
+  <h3 style="margin-top:22px;font-size:16px">Step 3 — CPI bridge</h3>
+  <p>For each CPI division <i>d</i>, we weight industry PPI moves by how much of each industry's household expenditure lands in division <i>d</i>. The weights come from the ONS CPA↔COICOP converter (using 2019 proportions, pre-Covid) multiplied by each IOAT-CPA's 2023 household final-consumption £ from the Use table (P3&nbsp;S14 column):</p>
+  <pre class="eq">Δ_predicted(d)  =  Σ<sub>j</sub>  (  hh_£<sub>j</sub> · prop<sub>j,d</sub>  /  Σ<sub>j</sub> hh_£<sub>j</sub> · prop<sub>j,d</sub>  )  ·  Δ_PPI<sub>j</sub></pre>
+  <p>ρ<sub>j</sub> is <i>not</i> applied again here — it was already used inside Δ_PPI<sub>j</sub>. The "gap" between observed and predicted for a division captures (a) industries we haven't wired in (services gaps), (b) retail/transport margins, and (c) the crudeness of using 2019 expenditure weights against 2022 shock proportions.</p>
+</section>
+
+<!-- Glossary -->
+<section id="glossary">
+  <h2>Reading the tables</h2>
+  <div class="grid c2">
+    <div>
+      <h3 style="font-size:14px;margin:0 0 4px">Energy cards</h3>
+      <ul class="caveats" style="font-size:13px">
+        <li><b>Peak</b>: max monthly index value between 2021-01 and 2024-12, expressed as % change vs 2021-01.</li>
+        <li><b>Avg 2022</b>: mean of the 12 monthly values in 2022, % vs 2021-01. This is the shock actually fed into the Leontief propagation.</li>
+        <li><b>Weighted headline PPI</b>: Σⱼ w<sub>j</sub> × PPI<sub>j</sub> / Σⱼ w<sub>j</sub> across all 78 matched industries, where w<sub>j</sub> = industry j's 2023 gross output at basic prices (IOT!P1). Replaces the simple mean.</li>
+      </ul>
+      <h3 style="font-size:14px;margin:16px 0 4px">Bridge table</h3>
+      <ul class="caveats" style="font-size:13px">
+        <li><b>Observed</b>: % change in ONS CPI division index from 2021-01 to its peak in 2021–24.</li>
+        <li><b>Predicted</b>: Σ<sub>j</sub> (share<sub>j,d</sub>) × Δ_PPI_peak<sub>j</sub> using 2019 household-expenditure weights.</li>
+        <li><b>Gap</b>: predicted − observed, in percentage points. Positive = bridge over-predicts (usually because a large chunk of the division's CPI weight sits in an industry the bridge hasn't seen: imputed rent, public-sector services, retail margins).</li>
+        <li><b>N</b>: number of IOAT industries contributing to the division.</li>
+      </ul>
+    </div>
+    <div>
+      <h3 style="font-size:14px;margin:0 0 4px">Industry table</h3>
+      <ul class="caveats" style="font-size:13px">
+        <li><b>Direct energy share</b>: a<sub>gas</sub> + a<sub>elec</sub> + a<sub>oil</sub> from column <i>j</i> of the 2023 A matrix (£ of energy per £ of output).</li>
+        <li><b>HH share of output</b>: how much of this industry's gross output is sold directly to UK households (Use!P3 S14 ÷ IOT!P1).</li>
+        <li><b>Obs peak PPI</b>: peak PPI (or SPPI, for services) move 2021-01 → any month 2021–24, rebased.</li>
+        <li><b>ρ<sub>peak</sub></b>: Δ_observed_peak ÷ theoretical-full-pass-through prediction from the avg-2022 internal shock. Below 1 ⇒ partial pass-through; above 1 ⇒ other cost pressure or excess pass-through.</li>
+        <li><b>ρ<sub>peak</sub> (ext)</b>: same but using Ofgem wholesale gas in place of D352_3 PPI. Systematically smaller because the wholesale denominator is larger (+258% avg-2022 vs +116%).</li>
+        <li><b>Agg method</b>: <i>ONS agg</i> = ONS's own bucket-level aggregate series; <i>mean of components</i> = simple mean across 4-digit CPA PPIs feeding the bucket (no 4-digit weight data exists); <i>single</i> = only one component series; <i>sppi_exact</i> = matched SPPI at the bucket's own CPA.</li>
+      </ul>
+    </div>
   </div>
 </section>
 
@@ -222,7 +300,12 @@
     <li><b>Within-bucket 4-digit CPA weights are not available.</b> Where an IOAT bucket contains multiple 4-digit CPA PPI series and ONS does not publish a bucket-level aggregate, we use simple mean across components. 28/51 buckets use the ONS aggregate directly; 20 fall back to simple mean.</li>
     <li><b>N=1 shock.</b> The 2022 episode is a single correlated gas/oil/electricity event; ρ estimates are conditional on that shock, not a structural parameter. Co-moving sterling depreciation and post-Covid demand are confounders.</li>
     <li><b>Internal shock definition.</b> The Leontief "shock" is currently the UK PPI move for D351/D352_3/C19, which already bakes in retail/regulatory pass-through. Switching to external wholesale (DESNZ NBP gas, N2EX baseload electricity, BoE Brent sterling) would separate upstream from downstream pass-through.</li>
-    <li><b>CPA→COICOP proportions from 2019.</b> Latest pre-Covid year; basket shifts since then are not captured in the weights.</li>
+    <li><b>CPA→COICOP proportions from 2019.</b> Latest pre-Covid year; basket shifts since then (substitution away from electricity, lockdown-era digital spending) are not captured in the weights. We use 2019 instead of 2020 specifically to avoid the Covid distortion.</li>
+    <li><b>Leontief is a long-run upper bound.</b> <i>theor_full</i> assumes every industry prices every £1 of extra energy cost straight into its output price with no lag — no margin compression, no volume loss, no substitution. Reality is closer to 50–70% for trade-exposed commodity manufacturing (Ganapati, Shapiro &amp; Walker 2020) and ~100–115% for concentrated / domestic-oriented sectors (LMM 2023). This is why ρ is almost always &lt; 1 for commodity industries and &gt; 1 for food / pharma / industrial gases.</li>
+    <li><b>Rescaling <i>theor_full</i> by the mean shock is a linear approximation.</b> The code takes the IRF scenario's long-run response to +10% on all three energy products and rescales by the simple mean of the 2022 shocks. A proper calculation would propagate each energy shock separately through the Leontief inverse; with large heterogeneous shocks (gas +258% external vs electricity +51% internal) this approximation overstates ρ for gas-heavy industries and understates it for electricity-heavy ones.</li>
+    <li><b>One-shock identification.</b> The 2022 episode is a single correlated gas/oil/electricity event with co-moving sterling depreciation and post-Covid demand. ρ is conditional on that shock, not a structural parameter. External Ofgem gas helps separate upstream from downstream, but doesn't solve the N=1 problem — the wholesale moves of gas, TTF, oil and electricity were themselves nearly collinear.</li>
+    <li><b>Gas is a feedstock, not just fuel, for chemicals / fertilisers.</b> The A matrix captures this via £-flows but assumes fixed proportions (no substitution away from gas in ammonia, urea, methanol production).</li>
+    <li><b>External shock only covers gas.</b> Electricity and oil in the "ext" variant still use UK D351/C19 PPI as the shock source. The full external-shock story needs N2EX wholesale electricity + Brent-in-sterling to be wired in alongside Ofgem.</li>
   </ul>
 </section>
 
@@ -286,7 +369,35 @@
       </div>
     `);
   }
-  // 4th card — weighted headline PPI peak
+  // 4th card — Ofgem external wholesale gas (if available)
+  const ext = obs.energy_external && obs.energy_external.gas_nbp_day_ahead;
+  if (ext) {
+    ecards.insertAdjacentHTML('beforeend', `
+      <div class="card" style="border-color:#d9a05b">
+        <p class="label" style="color:#8a5a10">Wholesale gas (Ofgem NBP)</p>
+        <p class="value pos">${fmtPct(ext.peak_shock, 0)}</p>
+        <p class="hint">peak ${ext.peak_month} · avg 2022 ${fmtPct(ext.avg_2022_shock, 0)}<br>external — monthly p/therm</p>
+      </div>
+    `);
+  }
+
+  // External-vs-internal callout narrative
+  const extCallout = document.getElementById('ext-callout-body');
+  if (ext) {
+    const intGas = obs.energy_ppi.D352_3;
+    const ratio = ext.peak_shock / intGas.peak_shock;
+    extCallout.innerHTML =
+      `Ofgem wholesale gas peaked at <b>${fmtPct(ext.peak_shock, 0)}</b> (${ext.peak_month}), `
+      + `while UK D352_3 PPI peaked at <b>${fmtPct(intGas.peak_shock, 0)}</b> (${intGas.peak_month}). `
+      + `That's a ratio of ${ratio.toFixed(1)}× — the external shock is the cost hitting UK gas distributors and large industrial buyers, `
+      + `the internal shock is what appeared in the UK gas-distribution industry's output PPI after retail smoothing. `
+      + `Using the external series as the shock makes ρ<sub>peak</sub> systematically smaller (the ρ<sub>peak</sub> (ext) column in the industry table).`;
+  } else {
+    document.getElementById('ext-callout').style.display = 'none';
+  }
+
+  // Adds a 5th card only on wide screens; on mobile the grid collapses nicely.
+  // Move weighted headline PPI to a second sub-row by appending another card grid
   const hl = obs.ppi_weighted_headline.index;
   const hlMonths = Object.keys(hl).sort();
   const hl0 = hl[hlMonths[0]];
@@ -420,14 +531,17 @@
   // ── Industry table ───────────────────────────────────────────────────────
   const ind = [...obs.industries].sort((a,b) => (b.direct_share||0) - (a.direct_share||0));
   const ibody = document.querySelector('#industry-table tbody');
+  const rhoClass = (x) => (x == null) ? '' : (x > 1 ? 'pos' : (x < 0.5 ? 'neg' : ''));
+  const aggMap = {
+    'ons_aggregate':        'ONS agg',
+    'simple_mean':          'mean of components',
+    'single_series':        'single',
+    'sppi_exact':           'SPPI exact',
+    'sppi_components_mean': 'SPPI components',
+  };
   for (const r of ind.slice(0, 30)) {
     const rhoPeak = r.rho_peak;
-    const rhoCls = (rhoPeak != null) ? (rhoPeak > 1 ? 'pos' : (rhoPeak < 0.5 ? 'neg' : '')) : '';
-    const aggLabel = {
-      'ons_aggregate': 'ONS agg',
-      'simple_mean':   'mean of components',
-      'single_series': 'single',
-    }[r.agg_method] || r.agg_method || '';
+    const rhoExt  = r.rho_peak_ext;
     ibody.insertAdjacentHTML('beforeend', `
       <tr>
         <td>${r.code}</td>
@@ -435,8 +549,9 @@
         <td class="num">${r.direct_share != null ? (r.direct_share*100).toFixed(1)+'%' : '—'}</td>
         <td class="num">${r.hh_share != null ? (r.hh_share*100).toFixed(1)+'%' : '—'}</td>
         <td class="num pos">${fmtPct(r.obs_peak)}</td>
-        <td class="num ${rhoCls}">${rhoPeak != null ? rhoPeak.toFixed(2) : '—'}</td>
-        <td style="font-size:11px;color:var(--muted)">${aggLabel}</td>
+        <td class="num ${rhoClass(rhoPeak)}">${rhoPeak != null ? rhoPeak.toFixed(2) : '—'}</td>
+        <td class="num ${rhoClass(rhoExt)}">${rhoExt != null ? rhoExt.toFixed(2) : '—'}</td>
+        <td style="font-size:11px;color:var(--muted)">${aggMap[r.agg_method] || r.agg_method || ''}</td>
       </tr>
     `);
   }
