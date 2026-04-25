@@ -268,6 +268,32 @@ details[open] summary{margin-bottom:10px}
   (large residual absorbed in output/margins); 0.55 &lt; ρ &lt; 0.85 → Mixed; ρ ≥ 0.85 → Price-led.
   Corroborated by ONS (2025): energy-intensive manufacturing output −33.6% from 2021 Q1 to
   2024 Q4.</p>
+
+  <p><strong>Why the IRF doesn't equal "Total energy × shock" from the exposures table.</strong>
+  The exposures table's <em>Total gas / elec / oil</em> columns measure <em>physical embedded
+  energy</em> — how much of each fuel is consumed across the whole supply chain per £1 of an
+  industry's output, traced through every chain, including chains that pass through other
+  energy industries. It uses the full Leontief inverse L<sub>full</sub> = (I − A)⁻¹ over all
+  104 industries (energy and non-energy together).</p>
+
+  <p>The IRF, by contrast, treats energy prices as <em>exogenous</em>: when you set
+  "electricity +50%", that 50% is the entire output-price move of UK electricity, already
+  reflecting any oil-cost or gas-cost pressures hitting electricity generators. The IRF
+  formula uses only the non-energy block: Δp<sub>R</sub> = (I − A<sub>RR</sub>′)⁻¹ ·
+  A<sub>ER</sub>′ · Δp<sub>E</sub>. Energy-to-non-energy transmission is captured by
+  A<sub>ER</sub> directly; chains that loop through other energy industries are <em>not</em>
+  propagated through L<sub>RR</sub> because we've taken those energy prices as given.</p>
+
+  <p>If you instead compute (Total oil × oil-shock) + (Total elec × elec-shock) + (Total gas
+  × gas-shock), every chain that physically passes through an energy industry is counted
+  <em>twice</em> — once at the oil shock (via the embedded path through electricity) and
+  again at the elec shock (because the elec shock already captures oil-cost pass-through
+  into electricity). For Industrial gases / fertilisers (C20A) the long-run IRF response
+  is about 8% but a naive Total × shock multiplication gives ~18%, an inflation of more
+  than 100% driven entirely by this double-counted oil-via-electricity-via-gas chain. The
+  <strong>IRF long-run is the right figure for a price-side IRF</strong>; the Total energy
+  column is the right figure for carbon-accounting / LCA, where you want to attribute every
+  joule of embedded energy to a single source independent of any specific price scenario.</p>
   </div>
 </details>
 </section>
