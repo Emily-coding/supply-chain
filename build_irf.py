@@ -28,11 +28,16 @@ distinct things:
 
 2. A price-side impulse response: treat C19, D351, D352_3 as exogenous
    price-setters and propagate shocks through the rest of the economy.
-   Two scenarios — UNIT (+10% on every energy product) and 2022 (refined +50%,
-   elec +200%, gas +250%). Two pass-through regimes — FULL (ρ=1) and
-   REALISTIC (sector-specific ρ_j, calibrated to Ganapati/Shapiro/Walker
-   2020 and Lafrogne-Joussier/Martin/Méjean 2023). Dynamic path built by
-   Neumann series; one expansion round = one quarter.
+   The energy → non-energy block of A uses the SAME corrected energy-
+   intensity vector e_fuel[j] = A_dom[fuel,j] + A_imp[fuel,j] (so an
+   industry that buys imported jet kerosene gets a bigger price response
+   than the domestic-only IRF would predict). The non-energy → non-energy
+   block stays domestic-A. Two scenarios — UNIT (+10% on every energy
+   product) and 2026 (oil +50%, elec +20%, gas +15% — oil-led, calibrated
+   to current 2026 wholesale moves). Two pass-through regimes — FULL
+   (ρ=1) and REALISTIC (sector-specific ρ_j, calibrated to Ganapati/
+   Shapiro/Walker 2020 and Lafrogne-Joussier/Martin/Méjean 2023). Dynamic
+   path built by Neumann series; one expansion round = one quarter.
 
 Output: data/irf.json, consumed by index.html and summary.html.
 """
@@ -56,9 +61,13 @@ ENERGY_CODES = ["C19", "D351", "D352_3"]
 TRANSPORT_CODES = ["H491_2", "H493T495", "H50", "H51", "H52", "H53"]
 HORIZON_QUARTERS = 12
 
-# 2022-calibrated wholesale price shocks (decimal, not pp).
-SHOCK_2022 = {"C19": 0.50, "D351": 2.00, "D352_3": 2.50}
+# Scenario shocks (decimal, not pp). UNIT is the elasticity probe; NAMED
+# is calibrated to the wholesale moves we're observing in 2026 — oil
+# leading (~+50% from 2024–25 baseline as supply tightens), electricity
+# and gas modest (UK has rebuilt LNG capacity / interconnectors since
+# 2022). Values are tunable here without touching downstream code.
 SHOCK_UNIT = {"C19": 0.10, "D351": 0.10, "D352_3": 0.10}
+SHOCK_2026 = {"C19": 0.50, "D351": 0.20, "D352_3": 0.15}
 
 # -----------------------------------------------------------------------------
 # Load GVA + total output per industry from the IOT sheet of the same workbook.
@@ -427,8 +436,17 @@ def build():
     missing = [c for c in ENERGY_CODES if c not in idx]
     assert not missing, f"missing energy codes in IxI: {missing}"
 
-    Arr = A[np.ix_(r_idx, r_idx)]   # R x R
-    Aer = A[np.ix_(e_idx, r_idx)]   # E x R — each col j shows energy inputs to industry j
+    Arr = A[np.ix_(r_idx, r_idx)]   # R x R — non-energy block, domestic-A only
+    # Imports-corrected energy → non-energy block: each col j shows TOTAL
+    # (UK + imp) energy inputs to non-energy industry j per £ of j's output.
+    # Built from the e_<fuel> vectors above so the same correction that
+    # feeds the exposures table also feeds the IRF — imported jet kerosene
+    # at H51 propagates to industries buying air transport via Aer; the
+    # downstream Arr propagation stays domestic-only because we don't have
+    # foreign A for non-energy intermediates.
+    e_per_code = {"C19": e_oil, "D351": e_elec, "D352_3": e_gas}
+    e_stacked  = np.vstack([e_per_code[c] for c in ENERGY_CODES])  # E x n
+    Aer        = e_stacked[:, r_idx]                                # E x R
 
     # Long-run (full pass-through) closed-form:
     # dp_R = (I - Arr')^{-1} Aer' dp_E
@@ -589,8 +607,8 @@ def build():
     scen_defs = [
         ("unit_full",      SHOCK_UNIT, False),
         ("unit_realistic", SHOCK_UNIT, True),
-        ("s2022_full",     SHOCK_2022, False),
-        ("s2022_realistic",SHOCK_2022, True),
+        ("s2026_full",     SHOCK_2026, False),
+        ("s2026_realistic",SHOCK_2026, True),
     ]
     scenarios = {}
     for name_, shock, rho in scen_defs:
@@ -618,20 +636,23 @@ def build():
         "n_industries": n,
         "horizon_quarters": HORIZON_QUARTERS,
         "shock_unit": SHOCK_UNIT,
-        "shock_2022": SHOCK_2022,
+        "shock_2026": SHOCK_2026,
         "methodology": (
             "Leontief price-side IRF: treat energy industries (C19, D351, D352_3) "
             "as exogenous and compute dp_R = (I - A_RR')^-1 A_ER' dp_E for the "
-            "full pass-through long-run limit. Dynamic path built by Neumann "
-            "series with one round = one quarter. Realistic scenarios apply "
-            "sector-specific rho_j pass-through coefficients (calibrated from "
-            "Ganapati/Shapiro/Walker 2020 and Lafrogne-Joussier/Martin/Mejean 2023). "
-            "Energy-share columns use a corrected energy-intensity vector at "
-            "each domestic node, e_fuel[i] = A_dom[fuel,i] + A_imp[fuel,i], "
-            "propagated through the domestic Leontief L_dom = (I-A_dom)^-1. "
-            "This captures imported jet/bunker/diesel directly and via the "
-            "transport channel, but does NOT capture foreign embodied energy "
-            "in imported non-energy intermediates — see import_intensity flag."
+            "full pass-through long-run limit. The energy → non-energy block "
+            "A_ER uses the IMPORTS-CORRECTED energy-intensity vector at each "
+            "domestic node, e_fuel[j] = A_dom[fuel,j] + A_imp[fuel,j], so "
+            "imported jet kerosene / marine bunker / diesel feed the price "
+            "response of any industry that buys them directly or buys "
+            "transport services from an industry that does. The non-energy → "
+            "non-energy block A_RR stays domestic-A only. Dynamic path built "
+            "by Neumann series with one round = one quarter. Realistic "
+            "scenarios apply sector-specific rho_j pass-through coefficients "
+            "(calibrated from Ganapati/Shapiro/Walker 2020 and Lafrogne-"
+            "Joussier/Martin/Mejean 2023). Foreign embodied energy in "
+            "imported non-energy intermediates is NOT captured — see the "
+            "import_intensity flag for which industries that gap matters most."
         ),
         "industries": out_rows,
     }

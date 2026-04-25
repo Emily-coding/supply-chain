@@ -428,7 +428,8 @@ document.getElementById("search").addEventListener("input",e=>{
   drawExposures(allData);
 });
 
-fetch("data/irf.json")
+// Cache-bust the JSON fetch so a stale build can't linger in the browser.
+fetch("data/irf.json?t=" + Date.now())
   .then(r=>r.json())
   .then(d=>{
     allData = d.industries;

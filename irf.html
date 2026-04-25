@@ -138,12 +138,17 @@ details[open] summary{margin-bottom:10px}
 </nav>
 
 <header>
-  <h1>UK supply chains — energy price impulse response by SIC 2007</h1>
-  <p>How a shock to energy producer prices propagates through UK supply chains. Built from the
-  <strong>ONS 2023 Input-Output Analytical Tables (Industry × Industry)</strong>
-  using a Leontief price-side IRF. Sector-specific pass-through coefficients ρ from
-  Ganapati/Shapiro/Walker (AEJ Applied 2020) and Lafrogne-Joussier/Martin/Méjean (CEPII 2023).
-  Click any row to pin/unpin it on the line chart.</p>
+  <h1>UK energy-price IRF and observed PPI, by SIC 2007</h1>
+  <p>Two views of the same shock-propagation question. The <strong>impulse response</strong>
+  charts (top) are model output from the <strong>ONS 2023 Input-Output Analytical Tables
+  (Industry × Industry)</strong> — a Leontief price IRF where the energy → non-energy
+  block uses an imports-corrected energy-intensity vector, so imported jet kerosene,
+  marine bunker and diesel feed the response of industries that buy them. The rest of
+  the supply chain stays domestic-A. Sector-specific pass-through ρ from
+  Ganapati/Shapiro/Walker (AEJ Applied 2020) and Lafrogne-Joussier/Martin/Méjean (CEPII
+  2023). The <strong>observed PPI chart</strong> (below) shows what UK producer prices
+  actually did from 2019 to early 2026 — the realised counterpart to the model.
+  Click any legend entry on either chart to pin/unpin or hide/show that line.</p>
 </header>
 <main>
 
@@ -155,7 +160,7 @@ details[open] summary{margin-bottom:10px}
   <div class="ctrl-bar">
     <div class="ctrl-group" id="scen-grp">
       <button class="active" data-scen="unit">+10% all energy (unit)</button>
-      <button data-scen="s2022">2022 shock (gas +250%, elec +200%, oil +50%)</button>
+      <button data-scen="s2026">2026 shock (oil +50%, elec +20%, gas +15%)</button>
     </div>
     <div class="ctrl-group" id="pt-grp">
       <button class="active" data-pt="full">Full pass-through</button>
@@ -163,10 +168,9 @@ details[open] summary{margin-bottom:10px}
     </div>
     <div class="qslider-wrap">
       <label for="qslider">Quarter:</label>
-      <input type="range" id="qslider" min="1" max="12" value="4"/>
+      <input type="range" id="qslider" min="1" max="8" value="4"/>
       <span id="qval">Q4 (1 year)</span>
     </div>
-    <input type="search" id="search" placeholder="Filter by code or name…"/>
   </div>
 </section>
 
@@ -184,29 +188,21 @@ details[open] summary{margin-bottom:10px}
   </div>
 </section>
 
-<!-- ── IRF table ── -->
+<!-- ── Observed PPI trajectories ── -->
 <section>
-  <h2>Industry IRF — producer price response by quarter (sortable)</h2>
-  <div class="tbl-wrap">
-    <table id="tbl">
-      <thead>
-        <tr>
-          <th data-k="code">Code<span class="arr">▾</span></th>
-          <th data-k="name">Industry<span class="arr">▾</span></th>
-          <th data-k="direct_share" title="Direct energy cost (gas+elec+refined oil) per £1 output">Direct<br>energy%<span class="arr">▾</span></th>
-          <th data-k="direct_gas" title="Gas per £1 output">Gas%<span class="arr">▾</span></th>
-          <th data-k="direct_elec" title="Electricity per £1 output">Elec%<span class="arr">▾</span></th>
-          <th data-k="irf_q1" title="PPI response at Q1 under selected scenario">Q1%<span class="arr">▾</span></th>
-          <th data-k="irf_q4" title="PPI response at Q4 (1 year)">Q4%<span class="arr">▾</span></th>
-          <th data-k="irf_q8" title="PPI response at Q8 (2 years)">Q8%<span class="arr">▾</span></th>
-          <th data-k="irf_q12" title="PPI response at Q12 (3 years)">Q12%<span class="arr">▾</span></th>
-          <th data-k="lr" title="Long-run Leontief limit (full pass-through only)">LR%<br>(full)<span class="arr">▾</span></th>
-          <th data-k="rho" title="Sector-specific pass-through coefficient">ρ<span class="arr">▾</span></th>
-          <th data-k="margin">Adjustment margin<span class="arr">▾</span></th>
-        </tr>
-      </thead>
-      <tbody id="tbody"></tbody>
-    </table>
+  <h2>Observed PPI trajectories — what actually happened, 2019 to early 2026</h2>
+  <p style="color:var(--muted);font-size:12px;margin-bottom:10px;max-width:960px">
+  Monthly ONS Output PPI (goods), rebased to <strong>2021-01 = 100</strong>. The
+  pre-pandemic period (2019–2020) sits below 100; the 2022 wholesale shock takes
+  energy series to multiples of baseline; recent moves (2024–2026) show partial
+  reversion plus a renewed oil-led move in early 2026. Energy industries (gas,
+  electricity, refined oil) shown bold; representative downstream industries
+  (industrial gases / fertilisers, iron &amp; steel, food, dairy) shown for context;
+  the output-weighted economy-wide headline shown dashed in white. Click a legend
+  entry to hide / restore that line.
+  </p>
+  <div class="chart-box">
+    <div id="ppi-chart-wrap"></div>
   </div>
 </section>
 
@@ -224,6 +220,15 @@ details[open] summary{margin-bottom:10px}
   whose output prices are shocked: C19 (Coke &amp; refined petroleum), D351 (Electricity
   generation, transmission &amp; distribution), D352_3 (Gas manufacture &amp; distribution).
   All other 101 industries are endogenous.</p>
+
+  <p><strong>Imports correction in A<sub>ER</sub>.</strong> The energy → non-energy block uses
+  an imports-corrected energy-intensity vector at each domestic node:
+  e<sub>fuel</sub>[j] = A<sub>dom</sub>[fuel,j] + A<sub>imp</sub>[fuel,j], so an industry's
+  price response to a shock reflects all the energy it buys (UK + imports), not just what
+  it buys from UK energy industries. Imported jet kerosene at H51 propagates correctly
+  to industries that buy air transport. The non-energy → non-energy block A<sub>RR</sub>
+  stays domestic-A only — we don't have foreign A coefficients for non-energy intermediates.
+  Foreign embodied energy in imported steel / chemicals / electronics is not captured.</p>
 
   <p><strong>Long-run price model.</strong> Partition A into energy (E) and rest (R) blocks.
   With no change in primary-input costs elsewhere, the steady-state response of non-energy
@@ -248,9 +253,11 @@ details[open] summary{margin-bottom:10px}
   domestically-oriented concentrated sectors. The gap between full and realistic at q12 is the
   portion absorbed via margin compression or output reduction.</p>
 
-  <p><strong>Shock scenarios.</strong> Unit: +10% to each energy product price simultaneously.
-  2022-calibrated: refined petroleum +50%, electricity +200%, gas +250% — broadly matching
-  peak wholesale moves from 2021 Q1 to 2022 Q3. Results scale linearly with shock size.</p>
+  <p><strong>Shock scenarios.</strong> Unit: +10% to each energy product price simultaneously
+  (use this for elasticity-style reasoning — outputs scale linearly).
+  2026-calibrated: refined petroleum +50%, electricity +20%, gas +15% — oil-led, reflecting
+  the wholesale moves we're observing in 2026 (oil supply tightness vs. comparatively
+  stable UK gas/electricity post-2022). Values are tunable in <code>build_irf.py</code>.</p>
 
   <p><strong>Adjustment margin classification.</strong> Derived from ρⱼ: ρ ≤ 0.55 → Quantity-led
   (large residual absorbed in output/margins); 0.55 &lt; ρ &lt; 0.85 → Mixed; ρ ≥ 0.85 → Price-led.
@@ -276,6 +283,20 @@ const PALETTE = [
 const MARGIN_LABEL = {q:"Quantity-led",m:"Mixed",p:"Price-led"};
 const MARGIN_CLASS = {q:"b-q",m:"b-m",p:"b-p"};
 
+// IOAT bucket sets used for colouring the bar chart by category.
+const FOOD_CODES      = new Set(["C101","C102_3","C104","C105","C106","C107","C108","C109","C1101T1106 & C12","C1107"]);
+const TRANSPORT_CODES = new Set(["H491_2","H493T495","H50","H51","H52","H53"]);
+
+// Bar-chart colour scheme. Priority: ETII full > ETII partial > food > transport
+// > other. ETII colours match the badge colours used on the exposures page.
+function barCategoryColor(r){
+  if (r.etii === "etii")           return "#5ea0ff";   // ETII full — blue (matches .b-etii)
+  if (r.etii === "partial")        return "#7d99c8";   // ETII partial — lighter blue
+  if (FOOD_CODES.has(r.code))      return "#2ecc71";   // Food — green
+  if (TRANSPORT_CODES.has(r.code)) return "#f5a623";   // Transport — orange
+  return "#6a7488";                                    // Everything else — muted grey
+}
+
 function pct(v,dp=1){return v===null||v===undefined?"—":(v*100).toFixed(dp)+"%"}
 function margin(rho){
   if(rho<=0.55) return "q";
@@ -284,11 +305,9 @@ function margin(rho){
 }
 
 let allData = [];
-let scen  = "unit";  // unit | s2022
+let scen  = "unit";  // unit | s2026
 let pt    = "full";  // full | realistic
 let qsel  = 4;
-let searchTerm = "";
-let sortKey = "irf_q4", sortDir = -1;
 let pinned = new Set();
 
 function scenKey(){ return `${scen}_${pt}`; }
@@ -310,9 +329,11 @@ function enrichRow(r){
 /* ── Line chart (SVG) ─────────────────────────────────────── */
 function drawLine(data){
   const wrap = document.getElementById("line-chart-wrap");
-  const W=680, H=260, ML=44, MR=16, MT=10, MB=36;
+  // Right margin widened to leave room for the industry-name end-of-line
+  // labels (previously this was just a 6-char code).
+  const W=720, H=260, ML=44, MR=140, MT=10, MB=36;
   const cw = W-ML-MR, ch = H-MT-MB;
-  const QUARTERS = 12;
+  const QUARTERS = 8;
 
   const sorted = [...data].sort((a,b)=>Math.abs(irfQ(b,qsel)||0)-Math.abs(irfQ(a,qsel)||0));
   const top10 = sorted.slice(0,10).map(r=>r.code);
@@ -354,18 +375,24 @@ function drawLine(data){
     const bold = pinned.has(code) ? "3" : "1.5";
     svg += `<path d="${d}" fill="none" stroke="${col}" stroke-width="${bold}" stroke-linejoin="round"/>`;
     const [lx,ly] = pts[pts.length-1];
-    const label = code.length>10 ? code.slice(0,10)+"…" : code;
-    svg += `<text x="${lx+3}" y="${ly+4}" font-size="9" fill="${col}">${label}</text>`;
+    // End-of-line label: use the (already shortened) industry name, capped at
+    // 22 chars so it fits the right-margin gutter without bumping into siblings.
+    const fullName = (row.name || code).trim();
+    const label = fullName.length > 22 ? fullName.slice(0,22)+"…" : fullName;
+    svg += `<text x="${lx+4}" y="${ly+4}" font-size="9" fill="${col}">${label}</text>`;
   });
   svg += `</svg>`;
 
-  let leg = `<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:8px;font-size:10px">`;
+  let leg = `<div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:8px;font-size:10px">`;
   show.forEach((code,ci)=>{
     const row = data.find(r=>r.code===code); if(!row) return;
     const col = PALETTE[ci % PALETTE.length];
     const bold = pinned.has(code) ? "font-weight:700" : "";
-    leg += `<span style="color:${col};${bold};cursor:pointer" data-pin="${code}">`+
-           `● ${code}</span>`;
+    // Show industry name in the legend (with code on hover) instead of just the code.
+    const fullName = (row.name || code).trim();
+    const labelText = fullName.length > 22 ? fullName.slice(0,22)+"…" : fullName;
+    leg += `<span style="color:${col};${bold};cursor:pointer" data-pin="${code}" title="${code} — ${fullName.replace(/"/g,'&quot;')}">`+
+           `● ${labelText}</span>`;
   });
   leg += `</div>`;
   wrap.innerHTML = svg + leg;
@@ -393,53 +420,128 @@ function drawBar(data){
     const y  = i*(barH+gap)+8;
     const bx = ML;
     const w  = bw(v);
-    const col= r.rho<=0.55?"#ef5b5b": r.rho<0.85?"#f5a623":"#2ecc71";
+    const col = barCategoryColor(r);
     const nm = r.name.length>22 ? r.name.slice(0,22)+"…" : r.name;
     svg += `<text x="${ML-4}" y="${y+barH-1}" text-anchor="end" font-size="9" fill="#8a93a6">${nm}</text>`;
-    svg += `<rect x="${bx}" y="${y}" width="${w.toFixed(1)}" height="${barH}" rx="2" fill="${col}" fill-opacity=".8"/>`;
+    svg += `<rect x="${bx}" y="${y}" width="${w.toFixed(1)}" height="${barH}" rx="2" fill="${col}" fill-opacity=".85"/>`;
     svg += `<text x="${bx+w+3}" y="${y+barH-1}" font-size="9" fill="#e6e9f0">${(v*100).toFixed(1)}%</text>`;
   });
   svg += `</svg>`;
-  wrap.innerHTML = svg;
+  // Colour-key for the bar categories. Sits below the bars.
+  const key = `<div style="display:flex;flex-wrap:wrap;gap:10px;margin-top:6px;font-size:10px">`+
+    `<span style="color:#5ea0ff">● ETII</span>`+
+    `<span style="color:#7d99c8">● ETII partial</span>`+
+    `<span style="color:#2ecc71">● Food</span>`+
+    `<span style="color:#f5a623">● Transport</span>`+
+    `<span style="color:#6a7488">● Other</span>`+
+    `</div>`;
+  wrap.innerHTML = svg + key;
 }
 
-/* ── Table ────────────────────────────────────────────────── */
-function drawTable(data){
-  const term = searchTerm.toLowerCase();
-  let rows = data.map(enrichRow).filter(r=>
-    !term || (r.code+" "+r.name).toLowerCase().includes(term)
-  );
-  rows.sort((a,b)=>{
-    let va = a[sortKey]??-Infinity;
-    let vb = b[sortKey]??-Infinity;
-    if(typeof va==="string") return sortDir*(va<vb?-1:va>vb?1:0);
-    return sortDir*(va-vb);
+/* ── Observed PPI trajectories chart (SVG) ────────────────── */
+let ppiData = null;            // observed.json once loaded
+const ppiHidden = new Set();   // codes the user has clicked to hide in the legend
+
+// Default series shown on the PPI chart. Energy industries shown bold; downstream
+// industries shown for context; output-weighted headline drawn dashed in white.
+const PPI_SERIES = [
+  {code:"D352_3",        label:"Gas",                            color:"#ef5b5b", bold:true},
+  {code:"D351",          label:"Electricity",                    color:"#5ea0ff", bold:true},
+  {code:"C19",           label:"Refined oil",                    color:"#f5a623", bold:true},
+  {code:"C20A",          label:"Industrial gases / fertilisers", color:"#a259ff"},
+  {code:"C241T243",      label:"Iron & steel",                   color:"#8a93a6"},
+  {code:"C108",          label:"Other food mfg",                 color:"#2ecc71"},
+  {code:"C105",          label:"Dairy",                          color:"#6fe3a2"},
+  {code:"__HEADLINE__",  label:"Output-weighted headline",       color:"#e6e9f0", dashed:true},
+];
+
+function drawPpiChart(){
+  const wrap = document.getElementById("ppi-chart-wrap");
+  if (!wrap || !ppiData) return;
+
+  const lookupSeries = s => s.code === "__HEADLINE__"
+    ? (ppiData.ppi_weighted_headline?.index || {})
+    : (ppiData.ppi_index_by_ioat?.[s.code] || {});
+
+  // Use the union of months across the energy series so the x-axis is canonical
+  // even if some sparser series are missing the very last month.
+  const monthSet = new Set();
+  ["D351","D352_3","C19"].forEach(c => Object.keys(ppiData.ppi_index_by_ioat?.[c] || {}).forEach(m => monthSet.add(m)));
+  const months = [...monthSet].sort();
+  if (!months.length) {
+    wrap.innerHTML = `<p style="color:var(--muted);font-size:11px">observed.json missing or empty — run <code>python3 build_observed.py</code> to regenerate.</p>`;
+    return;
+  }
+
+  const visible = PPI_SERIES.filter(s => !ppiHidden.has(s.code));
+  let yMax = 100, yMin = 100;
+  visible.forEach(s => {
+    const idx = lookupSeries(s);
+    months.forEach(m => {
+      const v = idx[m];
+      if (v != null) { if (v > yMax) yMax = v; if (v < yMin) yMin = v; }
+    });
+  });
+  // Round bounds outward to a tidy 25-step.
+  yMax = Math.ceil(yMax/25)*25;
+  yMin = Math.max(0, Math.floor(yMin/25)*25);
+
+  const W=720, H=320, ML=50, MR=180, MT=10, MB=30;
+  const cw = W-ML-MR, ch = H-MT-MB;
+  const xs = i => ML + (i/(months.length-1))*cw;
+  const ys = v => MT + (1 - (v-yMin)/(yMax-yMin))*ch;
+
+  let svg = `<svg viewBox="0 0 ${W} ${H}" class="chart">`;
+
+  // Y grid (25-pt steps) + axis labels
+  for (let v = yMin; v <= yMax; v += 25) {
+    const y = ys(v);
+    svg += `<line x1="${ML}" y1="${y}" x2="${W-MR}" y2="${y}" stroke="#242936" stroke-width="1"/>`;
+    svg += `<text x="${ML-4}" y="${y+4}" text-anchor="end" font-size="10" fill="#6a7488">${v}</text>`;
+  }
+  // Baseline line emphasised (=100)
+  {
+    const y = ys(100);
+    svg += `<line x1="${ML}" y1="${y}" x2="${W-MR}" y2="${y}" stroke="#3a4258" stroke-width="1" stroke-dasharray="2,3"/>`;
+  }
+  // X axis: tick on every January
+  months.forEach((m, i) => {
+    if (m.endsWith("-01")) {
+      const x = xs(i);
+      svg += `<line x1="${x}" y1="${MT}" x2="${x}" y2="${MT+ch+4}" stroke="#242936" stroke-width="1"/>`;
+      svg += `<text x="${x}" y="${H-4}" text-anchor="middle" font-size="10" fill="#6a7488">${m.slice(0,4)}</text>`;
+    }
   });
 
-  const tbody = document.getElementById("tbody");
-  tbody.innerHTML = rows.map(r=>{
-    const pin = pinned.has(r.code)?"pinned":"";
-    const mc  = MARGIN_CLASS[r.margin_c];
-    return `<tr class="${pin}" data-code="${r.code}">
-      <td><code style="font-size:11px">${r.code}</code></td>
-      <td class="name-cell">${r.name}</td>
-      <td class="num">${pct(r.direct_share)}</td>
-      <td class="num">${pct(r.direct_gas)}</td>
-      <td class="num">${pct(r.direct_elec)}</td>
-      <td class="num">${pct(r.irf_q1)}</td>
-      <td class="num">${pct(r.irf_q4)}</td>
-      <td class="num">${pct(r.irf_q8)}</td>
-      <td class="num">${pct(r.irf_q12)}</td>
-      <td class="num">${pct(r.lr)}</td>
-      <td class="num">${r.rho.toFixed(2)}</td>
-      <td><span class="badge ${mc}">${MARGIN_LABEL[r.margin_c]}</span></td>
-    </tr>`;
-  }).join("");
+  // Lines + end-of-line label
+  visible.forEach(s => {
+    const idx = lookupSeries(s);
+    const pts = months.map((m,i) => [xs(i), ys(idx[m] != null ? idx[m] : null)])
+                      .filter(p => p[1] != null && !isNaN(p[1]));
+    if (pts.length < 2) return;
+    const d = pts.map((p,i)=>(i===0?"M":"L")+p[0].toFixed(1)+","+p[1].toFixed(1)).join(" ");
+    const sw   = s.bold ? 2.5 : 1.5;
+    const dash = s.dashed ? ` stroke-dasharray="6,3"` : "";
+    svg += `<path d="${d}" fill="none" stroke="${s.color}" stroke-width="${sw}"${dash} stroke-linejoin="round"/>`;
+    const last = pts[pts.length-1];
+    const lab = s.label.length > 24 ? s.label.slice(0,24)+"…" : s.label;
+    svg += `<text x="${last[0]+4}" y="${last[1]+4}" font-size="9" fill="${s.color}">${lab}</text>`;
+  });
+  svg += `</svg>`;
 
-  tbody.querySelectorAll("tr").forEach(tr=>tr.addEventListener("click",()=>{
-    const c=tr.dataset.code;
-    if(pinned.has(c)) pinned.delete(c); else pinned.add(c);
-    render();
+  // Legend with click-to-toggle visibility
+  let legend = `<div style="display:flex;flex-wrap:wrap;gap:12px;margin-top:8px;font-size:11px">`;
+  PPI_SERIES.forEach(s => {
+    const opacity = ppiHidden.has(s.code) ? "0.35" : "1";
+    legend += `<span data-toggle="${s.code}" style="color:${s.color};opacity:${opacity};cursor:pointer">● ${s.label}</span>`;
+  });
+  legend += `</div>`;
+
+  wrap.innerHTML = svg + legend;
+  wrap.querySelectorAll("[data-toggle]").forEach(el => el.addEventListener("click", () => {
+    const c = el.dataset.toggle;
+    if (ppiHidden.has(c)) ppiHidden.delete(c); else ppiHidden.add(c);
+    drawPpiChart();
   }));
 }
 
@@ -447,7 +549,7 @@ function render(){
   const enriched = allData.map(enrichRow);
   drawLine(enriched);
   drawBar(enriched);
-  drawTable(allData);
+  drawPpiChart();
 }
 
 document.querySelectorAll("#scen-grp button").forEach(b=>b.addEventListener("click",()=>{
@@ -462,36 +564,47 @@ const slider=document.getElementById("qslider");
 const qval  =document.getElementById("qval");
 slider.addEventListener("input",()=>{
   qsel=+slider.value;
-  qval.textContent=`Q${qsel} (${qsel<4?"<1 yr":qsel===4?"1 year":qsel===8?"2 years":"3 years"})`;
+  const yearText = qsel === 4 ? "1 year" : qsel === 8 ? "2 years" : `${qsel*3} months`;
+  qval.textContent = `Q${qsel} (${yearText})`;
   render();
 });
-document.getElementById("search").addEventListener("input",e=>{
-  searchTerm=e.target.value; render();
-});
-document.querySelectorAll("#tbl thead th[data-k]").forEach(th=>th.addEventListener("click",()=>{
-  const k=th.dataset.k;
-  if(sortKey===k) sortDir*=-1; else{sortKey=k;sortDir=-1;}
-  render();
-}));
-
-fetch("data/irf.json")
-  .then(r=>r.json())
-  .then(d=>{
-    allData = d.industries;
+// Load irf.json (model output) and observed.json (realised PPI series) in parallel.
+// Either can fail independently — the IRF charts work without observed; the PPI
+// chart works without irf, in principle, but we render both inside one render().
+// Cache-bust the JSON fetches so a stale build can't linger in the browser
+// when we regenerate data files. (Local http.server doesn't set
+// Cache-Control headers, but hosted environments and Workbox-style PWAs do.)
+const cb = "?t=" + Date.now();
+Promise.all([
+  fetch("data/irf.json"      + cb).then(r=>r.json()).catch(e=>({__error:e})),
+  fetch("data/observed.json" + cb).then(r=>r.json()).catch(e=>({__error:e})),
+]).then(([irf, obs])=>{
+  if (irf.__error) {
     document.getElementById("meta-note").innerHTML =
-      `<strong>Data:</strong> ${d.source} &nbsp;·&nbsp; `+
-      `<strong>${d.n_industries}</strong> industries &nbsp;·&nbsp; `+
-      `<strong>Energy products shocked:</strong> ${d.energy_codes.join(", ")} &nbsp;·&nbsp; `+
-      `<strong>Unit shock:</strong> +10% all energy &nbsp;·&nbsp; `+
-      `<strong>2022 shock:</strong> gas +250%, elec +200%, refined +50% &nbsp;·&nbsp; `+
-      `<em>Click any table row or legend label to pin/unpin on the line chart.</em>`;
-    render();
-  })
-  .catch(e=>{
-    document.getElementById("meta-note").innerHTML =
-      `<strong style="color:#ef5b5b">Error loading data/irf.json:</strong> ${e.message}. `+
+      `<strong style="color:#ef5b5b">Error loading data/irf.json:</strong> ${irf.__error.message}. `+
       `Run <code>python3 build_irf.py</code> from the repo root to regenerate it.`;
-  });
+    return;
+  }
+  allData = irf.industries;
+  ppiData = obs.__error ? null : obs;
+
+  // Read scenario shocks from the JSON so the data-note can never drift from
+  // the values build_irf.py actually used.
+  const fmtShockPct = v => v == null ? "—" : `+${(v*100).toFixed(0)}%`;
+  const s2026 = irf.shock_2026 || {};
+  const s2026Text = `oil ${fmtShockPct(s2026.C19)}, elec ${fmtShockPct(s2026.D351)}, gas ${fmtShockPct(s2026.D352_3)}`;
+
+  const obsBlurb = ppiData
+    ? `<strong>Observed PPI:</strong> ${Object.keys(ppiData.ppi_index_by_ioat||{}).length} industries, ${ppiData.window?.start} → ${ppiData.window?.end}`
+    : `<strong style="color:#ef5b5b">observed.json failed to load — PPI chart will be empty.</strong> Run <code>python3 build_observed.py</code> to regenerate.`;
+
+  document.getElementById("meta-note").innerHTML =
+    `<strong>IRF model:</strong> ONS 2023 IxI, ${irf.n_industries} industries; A<sub>ER</sub> includes imports of energy products. `+
+    `<strong>Scenarios:</strong> +10% unit shock; 2026 shock — ${s2026Text}. `+
+    obsBlurb + `.`;
+
+  render();
+});
 </script>
 </body>
 </html>

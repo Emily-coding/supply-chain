@@ -51,9 +51,10 @@ def normalise_ioat_code(code: str) -> str:
 # 2012-01 = r1014, so YYYY-MM = r1014 + (YYYY-2012)*12 + (MM-1)
 def month_row(y, m): return 1014 + (y-2012)*12 + (m-1)
 
-SHOCK_START = (2021, 1)
-SHOCK_END   = (2022, 10)   # ~UK PPI peak; gas peaked Aug 2022 but PPI lags
-WINDOW_END  = (2024, 12)
+SHOCK_START = (2021, 1)            # normalisation anchor: each PPI series rebased to this month = 100
+SHOCK_END   = (2022, 10)           # ~UK PPI peak; gas peaked Aug 2022 but PPI lags
+CHART_START = (2019, 1)            # earliest month loaded from spreadsheets — the chart shows from here
+WINDOW_END  = (2026, 12)           # latest month loaded — set to current year-end; missing months silently skipped
 
 # PPI series -> IOAT industry mapping.
 # Multiple CPA series may map to one IOAT industry; they will be averaged.
@@ -213,16 +214,20 @@ def parse_cpa(title: str):
 
 
 def load_ppi():
-    """Extract all PPI OUTPUT DOMESTIC monthly values 2021-01 .. 2024-12."""
+    """Extract all PPI OUTPUT DOMESTIC monthly values 2021-01 onwards.
+    Range is bounded by WINDOW_END declared at the top of this file. Cells
+    that aren't yet published just come back as non-numeric and are skipped."""
     print(f"loading PPI …", flush=True); t0 = time.time()
     wb = openpyxl.load_workbook(PPI, data_only=True)
     ws = wb["data"]
     print(f"  loaded in {time.time()-t0:.1f}s", flush=True)
 
-    # Build the month → row index we need (48 months)
+    # Build the month → row index we need (CHART_START to WINDOW_END)
     months = []
-    for y in range(2021, 2025):
+    for y in range(CHART_START[0], WINDOW_END[0] + 1):
         for m in range(1, 13):
+            if (y, m) < CHART_START or (y, m) > WINDOW_END:
+                continue
             months.append((y, m, month_row(y, m)))
 
     # Scan columns: we want "PPI INDEX OUTPUT DOMESTIC" series, non-duplicate
@@ -315,8 +320,8 @@ def _sppi_row(y, q):
 
 
 def load_sppi():
-    """Extract SPPI OUTPUT DOMESTIC quarterly indices 2021 Q1 .. 2024 Q4 and
-    expand to monthly by holding each quarterly value flat across its three
+    """Extract SPPI OUTPUT DOMESTIC quarterly indices, 2021 Q1 to WINDOW_END,
+    and expand to monthly by holding each quarterly value flat across its three
     months. Returns list of {cpa, values: {YYYY-MM: float}, title, col}.
     """
     print(f"loading SPPI …", flush=True); t0 = time.time()
@@ -324,7 +329,13 @@ def load_sppi():
     ws = wb["data"]
     print(f"  loaded in {time.time()-t0:.1f}s", flush=True)
 
-    quarters = [(y, q, _sppi_row(y, q)) for y in range(2021, 2025) for q in range(1, 5)]
+    # Cover from CHART_START (2019 Q1 by default) to WINDOW_END
+    chart_start_quarter = ((CHART_START[1] - 1) // 3) + 1
+    quarters = [(y, q, _sppi_row(y, q))
+                for y in range(CHART_START[0], WINDOW_END[0] + 1)
+                for q in range(1, 5)
+                if (y, q*3) <= WINDOW_END
+                and (y > CHART_START[0] or q >= chart_start_quarter)]
 
     series = []
     for c in range(2, ws.max_column + 1):
@@ -442,7 +453,9 @@ def load_ofgem_gas():
     v0 = series.get("2021-01")
     if v0 is None:
         raise SystemExit("Ofgem gas series: no 2021-01 value")
-    window = {m: v for m, v in series.items() if "2021-01" <= m <= "2024-12"}
+    window_end_str   = f"{WINDOW_END[0]:04d}-{WINDOW_END[1]:02d}"
+    window_start_str = f"{CHART_START[0]:04d}-{CHART_START[1]:02d}"
+    window = {m: v for m, v in series.items() if window_start_str <= m <= window_end_str}
     peak_m = max(window, key=lambda m: window[m])
     peak_v = window[peak_m]
     avg_2022 = sum(v for m, v in window.items() if m.startswith("2022-")) / 12
@@ -463,26 +476,29 @@ def load_ofgem_gas():
 
 
 def load_cpi():
-    """Extract monthly CPI ALL-ITEMS and main divisions, 2021-01 .. 2024-12."""
+    """Extract monthly CPI ALL-ITEMS and main divisions, 2021-01 onwards
+    (bounded by WINDOW_END)."""
     print(f"loading CPI …", flush=True); t0 = time.time()
     wb = openpyxl.load_workbook(CPI, data_only=True)
     ws = wb["data"]
     print(f"  loaded in {time.time()-t0:.1f}s", flush=True)
 
-    # CPI file layout: same as PPI (col A row 8+ time labels). But monthly rows
-    # and row offsets may differ — scan col A around row 1100 to locate.
-    # Find "2021 JAN"
-    r_2021_01 = None
-    for r in range(900, ws.max_row + 1):
-        if ws.cell(r, 1).value == "2021 JAN":
-            r_2021_01 = r
+    # CPI file layout: same as PPI (col A row 8+ time labels). Find the
+    # CHART_START row by label; subsequent months are offset by index.
+    chart_label = f"{CHART_START[0]} {['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'][CHART_START[1]-1]}"
+    r_chart_start = None
+    for r in range(800, ws.max_row + 1):
+        if ws.cell(r, 1).value == chart_label:
+            r_chart_start = r
             break
-    if r_2021_01 is None:
-        raise SystemExit("cannot locate '2021 JAN' row in mm23.xlsx")
+    if r_chart_start is None:
+        raise SystemExit(f"cannot locate '{chart_label}' row in mm23.xlsx")
 
     months = []
-    for i, (y, m) in enumerate([(y, m) for y in range(2021, 2025) for m in range(1, 13)]):
-        months.append((y, m, r_2021_01 + i))
+    target_pairs = [(y, m) for y in range(CHART_START[0], WINDOW_END[0] + 1) for m in range(1, 13)
+                    if CHART_START <= (y, m) <= WINDOW_END]
+    for i, (y, m) in enumerate(target_pairs):
+        months.append((y, m, r_chart_start + i))
 
     # Target CPI titles. CPI level series (2015=100) rather than rate series.
     targets = {
@@ -987,7 +1003,8 @@ def main():
 
     # Assemble output
     result = {
-        "window":    {"start":"2021-01", "end":"2024-12"},
+        "window":    {"start": f"{CHART_START[0]:04d}-{CHART_START[1]:02d}",
+                       "end":   f"{WINDOW_END[0]:04d}-{WINDOW_END[1]:02d}"},
         "shock_window": {"start":"2021-01", "peak_end": max(energy_shock[k]['peak_month'] for k in energy_shock)},
         "energy_ppi": {k: {kk:vv for kk,vv in v.items() if kk!='peak_month'} |
                            {"peak_month": v["peak_month"]} for k,v in energy_shock.items()},
