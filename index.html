@@ -143,12 +143,15 @@ select.th-filter.active{border-color:var(--accent);color:var(--accent)}
 
 <header>
   <h1>UK supply chains — energy exposures by SIC 2007</h1>
-  <p>Direct and indirect energy cost shares per UK industry, from the
-  <strong>ONS 2023 Input-Output Analytical Tables (Industry × Industry)</strong>.
-  Direct cost shares are corrected for imports of energy products (jet kerosene,
-  marine bunker, diesel, gas, electricity); indirect propagation uses the
-  domestic Leontief inverse. ETII tags from DESNZ Jan 2023 list. Calibrated
-  pass-through ρ from Ganapati/Shapiro/Walker (2020) and Lafrogne-Joussier/Martin/Méjean (2023).</p>
+  <p>For every UK industry: how much of its costs are energy, both directly
+  and via the supply chain it buys from. Built from the <strong>ONS 2023
+  Input-Output tables</strong>. Direct shares include energy bought from UK
+  industries <em>and</em> imported energy products (jet kerosene, marine
+  bunker, diesel, imported gas and electricity). Indirect shares trace
+  through the UK domestic supply chain only. ETII tags follow the DESNZ
+  Jan 2023 list; the adjustment-margin badge is calibrated to pass-through
+  estimates from Ganapati/Shapiro/Walker (2020) and Lafrogne-Joussier/Martin/Méjean
+  (2023).</p>
 </header>
 <main>
 
@@ -159,25 +162,20 @@ select.th-filter.active{border-color:var(--accent);color:var(--accent)}
 <section id="exposures">
   <h2>Supply-chain energy exposures by SIC — direct + indirect</h2>
   <p style="color:var(--muted);font-size:12px;margin-bottom:10px;max-width:960px">
-  Per £1 of industry output, from the 2023 ONS A and Leontief inverse L matrices.
-  Energy-share columns use a <strong>corrected energy-intensity vector</strong> at every
-  domestic node — e<sub>fuel</sub>[i] = A<sub>dom</sub>[fuel,i] + A<sub>imp</sub>[fuel,i] —
-  so direct cost shares now include imported jet kerosene, marine bunker and diesel that
-  industries buy without going through a UK energy industry. The Leontief inverse itself
-  remains strictly domestic, L<sub>dom</sub> = (I − A<sub>dom</sub>)⁻¹ — i.e. supply-chain
-  propagation passes through UK industries only. Default view shows the three fuel
-  <strong>totals</strong> (direct + indirect via UK supply chain). Click
-  <em>Show direct/indirect breakdown</em> to split each total into its direct
-  (e<sub>fuel</sub>[j], UK + imp) and UK-domestic-indirect parts. The blue-tinted column
-  rebases <strong>direct</strong> gas+electricity to share of <strong>GVA</strong> — this
-  is the DESNZ ETII formula (80th-percentile cutoff ≈ 8.3% in this dataset defines ETII
-  eligibility). We don't show "Total/GVA" because Leontief total embodies energy across
-  the whole supply chain (output-scaled numerator) over a much smaller value-added
-  denominator — it produces &gt;100% values that aren't economically interpretable as
-  "energy share of value added". <strong>Imp%</strong> is the share of j's intermediate
-  input spending that is imported — a flag for how much of the upstream supply chain is
-  unmeasured (foreign embodied energy in imported non-energy intermediates). The badge
-  is the implied adjustment margin under an energy-cost shock; hover for ρ value.
+  Each row is one of the 101 IOAT industries. All percentages are share of that
+  industry's gross output at basic prices, except the blue-tinted column which is share
+  of GVA. <strong>Gas / Elec / Oil</strong> are the total embedded energy share —
+  what the industry buys directly (UK energy industries plus imported jet kerosene,
+  marine bunker, diesel, etc.) <em>plus</em> what's embedded in everything else it buys
+  through the UK domestic supply chain. Click <em>Show direct/indirect breakdown</em>
+  to split each total into its direct and indirect parts.
+  <strong>Gas+Elec / GVA</strong> rebases direct gas and electricity to value added — this
+  matches the DESNZ ETII formula; in this dataset the 80th-percentile threshold is
+  about 8.3%. <strong>Imp%</strong> is the share of an industry's intermediate spending
+  that is imported, used as a flag for the part of the upstream supply chain we can't
+  track (see callout below). The <strong>Adjustment margin</strong> badge says whether
+  an industry is more likely to raise prices or cut output when energy gets more
+  expensive; hover for the ρ value behind it.
   </p>
 
   <div class="ctrl-bar" style="margin-bottom:8px">
@@ -197,38 +195,49 @@ select.th-filter.active{border-color:var(--accent);color:var(--accent)}
 
   <!-- Literature panel -->
   <div class="note" style="margin-top:10px">
-  <strong>Literature estimates of price / quantity adjustment.</strong>
-  <strong>Pass-through.</strong> Ganapati, Shapiro &amp; Walker (AEJ Applied 2020), US manufacturing micro-data: ~70% of energy-cost changes pass into output prices on average, &gt;100% in concentrated sectors, &lt;70% in trade-exposed commodity segments.
-  Lafrogne-Joussier, Martin &amp; Méjean (CEPII 2023), French firm-level: ~100% pass-through of energy costs when firms reset prices, ~115% in least-competitive sectors (excess pass-through under market power).
-  Bank of England / Bank Underground (2023): UK aggregate pass-through is gradual, incomplete, and asymmetric.
+  <strong>What the literature says about how firms respond to energy shocks.</strong>
   <br><br>
-  <strong>Energy demand price elasticity (quantity margin).</strong> Marin &amp; Vona (Eur. Econ. Rev. 2021), French manufacturing firms: price elasticity ≈ −0.4 (electricity), −0.9 (gas); shrinks to −0.2 / −0.7 in the 2022 large-shock regime.
-  Labandeira, Labeaga &amp; López-Otero (Energy Policy 2017), meta-analysis of 428 studies: short-run ≈ −0.21, long-run ≈ −0.61.
-  Adeyemi-Hunt-style OECD industrial electricity panels: short-run ≈ −0.11 to −0.24, long-run ≈ −0.11 to −0.28; output elasticity ≈ 0.5.
-  Adjustment-channel ranking (Lafrogne-Joussier et al.): cut energy input → raise prices → substitute toward imported intermediates → shift production across plants → invest in efficiency.
+  <strong>Price pass-through.</strong> US manufacturing micro-data (Ganapati,
+  Shapiro &amp; Walker, AEJ Applied 2020): firms pass through about 70% of
+  energy-cost rises on average — more than 100% in concentrated industries,
+  less than 70% in commodity / trade-exposed segments. French firm-level data
+  (Lafrogne-Joussier, Martin &amp; Méjean, CEPII 2023): closer to 100% on
+  energy costs when firms reset prices, up to 115% in the least-competitive
+  sectors (excess pass-through under market power). Bank of England (2023)
+  finds UK aggregate pass-through is gradual, incomplete and asymmetric.
+  <br><br>
+  <strong>Quantity margin — how firms cut their own energy use.</strong>
+  French manufacturing (Marin &amp; Vona, Eur. Econ. Rev. 2021): price
+  elasticity of demand ≈ −0.4 for electricity and −0.9 for gas; smaller in
+  absolute value (−0.2 and −0.7) under the very large 2022 shock. Meta-analysis
+  of 428 studies (Labandeira, Labeaga &amp; López-Otero, Energy Policy 2017):
+  short-run ≈ −0.21, long-run ≈ −0.61. OECD industrial-electricity panels
+  (Adeyemi/Hunt-style): short-run −0.11 to −0.24, long-run −0.11 to −0.28;
+  output elasticity ≈ 0.5. Lafrogne-Joussier et al. rank the channels firms
+  actually use: <em>cut energy input</em> → <em>raise prices</em> → <em>switch
+  to imported inputs</em> → <em>shift production across plants</em> → <em>invest
+  in efficiency</em>.
   </div>
 
   <!-- Upstream-undercount callout — industries where the residual MRIO gap matters most -->
   <div class="note" style="border-color:rgba(245,166,35,0.5)">
-  <strong style="color:#ffc266">Upstream-supply-chain undercount — where the residual MRIO gap matters.</strong>
-  The corrected energy-intensity vector adds direct imports of energy products (jet kerosene, marine bunker, diesel,
-  imported gas, electricity interconnector) to each industry's direct cost share, and propagates that correction
-  through the UK domestic Leontief — so imported jet fuel at H51 flows correctly into industries that buy air
-  transport. What it still does <em>not</em> capture is foreign embodied energy in imported <em>non-energy</em>
-  intermediates (e.g. Chinese steel bought by UK fabricators, German chemicals bought by UK plastics, imported
-  semiconductors bought by UK electronics manufacturers). Closing that gap requires a multi-region input-output
-  table (OECD-ICIO, Eora) — out of scope here. The <strong>Imp%</strong> column flags the share of each industry's
-  intermediate input spending that is imported, which is a proxy for the size of the residual undercount.
-  Industries where Imp% &gt; 35% are the ones whose <em>true</em> total energy footprint is most likely to be
-  materially higher than the table reports — Hardt et al. (2018) put the average UK industrial MRIO uplift at
-  20–30% across all goods-producing sectors, with concentration in the high-import-intensity tail.
-  Top of the watch list: <strong>Aircraft repair (C3316) ~71%</strong>, <strong>Other chemicals (C205) ~59%</strong>,
-  <strong>Rubber & plastics (C22) ~53%</strong>, <strong>Petrochemicals (C20B) ~52%</strong>,
-  <strong>Aluminium & other basic metals (C244_5) ~51%</strong>, <strong>Edible oils (C104) ~50%</strong>,
-  <strong>Wood products (C16) ~48%</strong>, <strong>Industrial gases / fertilisers (C20A) ~46%</strong>,
-  <strong>Air transport (H51) ~46%</strong>, <strong>Dyestuffs & agrochemicals (C20C) ~44%</strong>,
-  <strong>Paints (C203) ~44%</strong>, <strong>Iron & steel (C241T243) ~42%</strong>,
-  <strong>Motor vehicles (C29) ~42%</strong>, <strong>Electronics (C26) ~36%</strong>.
+  <strong style="color:#ffc266">What this table doesn't capture — the upstream supply-chain gap.</strong>
+  Imports of energy products (jet kerosene, marine bunker, diesel, imported gas,
+  electricity interconnector) are added to each industry's direct cost share and
+  propagate through the UK domestic supply chain — so imported jet fuel bought by
+  UK airlines correctly flows on to industries that buy air-transport services.
+  What is <em>not</em> captured is the energy embedded in imported <em>non-energy</em>
+  goods — Chinese steel, German chemicals, Asian electronics. Tracking that would
+  need a multi-region input-output table (OECD-ICIO, Eora) and is out of scope here.
+  <br><br>
+  The <strong>Imp%</strong> column is a flag for how big this gap is likely to be
+  for any given industry: it is the share of the industry's intermediate spending
+  that is imported. <strong>Sort the table by Imp% descending</strong> to find the
+  most affected industries — aircraft repair sits at the top around 70%, then a
+  block of chemicals, plastics, basic metals, motor vehicles and machinery in the
+  40–55% range; electronics is just behind at the mid-30s.
+  Hardt et al. (2018) estimate the average UK industrial uplift from a full MRIO
+  treatment at 20–30%, concentrated in this high-import-intensity tail.
   </div>
 </section>
 
@@ -434,10 +443,9 @@ fetch("data/irf.json?t=" + Date.now())
   .then(d=>{
     allData = d.industries;
     document.getElementById("meta-note").innerHTML =
-      `<strong>Data:</strong> ${d.source} &nbsp;·&nbsp; `+
-      `<strong>${d.n_industries}</strong> industries &nbsp;·&nbsp; `+
-      `<strong>Direct cost shares:</strong> domestic A + imports of CPA_C19 / CPA_D351 / CPA_D352_3 from Imports use pxi &nbsp;·&nbsp; `+
-      `<strong>Indirect:</strong> domestic Leontief (I − A_dom)<sup>−1</sup>`;
+      `<strong>Source:</strong> ONS 2023 Input-Output Analytical Tables, ${d.industries.length} non-energy industries (the three UK energy industries are excluded since they're upstream of every other row). `+
+      `Direct shares add UK-domestic energy purchases plus imported refined petroleum, gas and electricity. `+
+      `Indirect shares trace through the UK supply chain via the Leontief inverse.`;
     drawExposures(allData);
   })
   .catch(e=>{
