@@ -205,6 +205,24 @@ details[open] summary{margin-bottom:10px}
   </div>
 </section>
 
+<!-- ── CPI basket composition by COICOP division ── -->
+<section>
+  <h2>CPI basket — share by COICOP division</h2>
+  <p style="color:var(--muted);font-size:12px;margin-bottom:10px;max-width:960px">
+  How the UK CPI basket splits across the 12 COICOP main divisions, parts per
+  1,000 (ONS 2024 published weights, approximate). One stacked bar; segments
+  sum to 100%. Each division gets its own colour. The two directly energy-exposed
+  divisions — <strong>04 Housing, water, electricity, gas &amp; fuels</strong> and
+  <strong>07 Transport</strong> (petrol / diesel) — together account for roughly
+  30% of the basket and are flagged with ★ in the legend. The other ten
+  divisions are energy-exposed only via supply-chain pass-through, which is what
+  the IRF model above traces.
+  </p>
+  <div class="chart-box">
+    <div id="cpi-basket-wrap"></div>
+  </div>
+</section>
+
 <!-- ── methodology ── -->
 <section>
 <details open>
@@ -463,6 +481,74 @@ function drawBar(data){
   wrap.innerHTML = svg + key;
 }
 
+/* ── CPI basket composition (static — ONS 2024 published weights) ─────────
+   Approximate parts-per-1000 weights for the 12 COICOP main divisions, used
+   to give context to the IRF / PPI charts above. Values can be refreshed
+   each February when ONS publishes "Consumer prices basket of goods and
+   services and updated weights". Direct-energy classification:
+     - "direct"   — division contains gas/electricity/fuels priced as the
+                    consumer item (CPI 04 housing/utilities, CPI 07 transport)
+     - "indirect" — division is exposed only via supply-chain pass-through
+*/
+const CPI_BASKET = [
+  {div:"01", label:"Food and non-alcoholic beverages", weight:113, energy:"indirect", colour:"#2ecc71"},
+  {div:"02", label:"Alcoholic beverages, tobacco",     weight: 41, energy:"indirect", colour:"#a259ff"},
+  {div:"03", label:"Clothing and footwear",            weight: 56, energy:"indirect", colour:"#ff9ff3"},
+  {div:"04", label:"Housing, water, electricity, gas & other fuels", weight:145, energy:"direct",   colour:"#f5a623"},
+  {div:"05", label:"Furniture, household equipment",   weight: 57, energy:"indirect", colour:"#c56cf0"},
+  {div:"06", label:"Health",                           weight: 24, energy:"indirect", colour:"#ef5b5b"},
+  {div:"07", label:"Transport",                        weight:142, energy:"direct",   colour:"#ee5a24"},
+  {div:"08", label:"Communication",                    weight: 24, energy:"indirect", colour:"#0abde3"},
+  {div:"09", label:"Recreation and culture",           weight:106, energy:"indirect", colour:"#5ea0ff"},
+  {div:"10", label:"Education",                        weight: 28, energy:"indirect", colour:"#ffd32a"},
+  {div:"11", label:"Restaurants and hotels",           weight:121, energy:"indirect", colour:"#00d2d3"},
+  {div:"12", label:"Miscellaneous goods and services", weight:143, energy:"indirect", colour:"#10ac84"},
+];
+
+function drawCpiBasket(){
+  const wrap = document.getElementById("cpi-basket-wrap");
+  if (!wrap) return;
+  const sorted = [...CPI_BASKET].sort((a,b)=>b.weight-a.weight);
+  const total  = CPI_BASKET.reduce((s,d)=>s+d.weight,0);  // should be 1000
+
+  // Single 100% stacked horizontal bar — 12 segments side-by-side, widths
+  // proportional to each division's share of the basket.
+  const W=720, H=68, ML=8, MR=8, MT=10, MB=14;
+  const barH = 36;
+  const cw = W-ML-MR;
+  let svg = `<svg viewBox="0 0 ${W} ${H}" class="chart">`;
+  let x = ML;
+  sorted.forEach(d => {
+    const w = (d.weight/total) * cw;
+    svg += `<rect x="${x.toFixed(1)}" y="${MT}" width="${w.toFixed(1)}" height="${barH}" fill="${d.colour}" fill-opacity="0.88" stroke="#0f1115" stroke-width="0.7"/>`;
+    // Two-line label inside segment when wide enough; just division code if narrow.
+    const pct = (d.weight/total*100).toFixed(1) + "%";
+    if (w >= 60) {
+      svg += `<text x="${(x + w/2).toFixed(1)}" y="${MT + barH/2 - 1}" text-anchor="middle" font-size="11" fill="#0f1115" font-weight="700">${d.div}</text>`;
+      svg += `<text x="${(x + w/2).toFixed(1)}" y="${MT + barH/2 + 11}" text-anchor="middle" font-size="9.5" fill="#0f1115">${pct}</text>`;
+    } else if (w >= 25) {
+      svg += `<text x="${(x + w/2).toFixed(1)}" y="${MT + barH/2 + 3}" text-anchor="middle" font-size="10" fill="#0f1115" font-weight="700">${d.div}</text>`;
+    }
+    x += w;
+  });
+  svg += `</svg>`;
+
+  // Legend grid: code + label + percentage. Each entry coloured to match its
+  // segment in the bar; ★ marks the directly energy-exposed divisions.
+  let legend = `<div style="display:grid;grid-template-columns:repeat(2,1fr);gap:4px 18px;margin-top:6px;font-size:11px;color:#aab4c8">`;
+  sorted.forEach(d => {
+    const star = d.energy === "direct" ? '<span title="Directly energy-exposed (CPI item is gas/electricity/fuel)" style="color:#f5a623">&nbsp;★</span>' : "";
+    const pct = (d.weight/total*100).toFixed(1);
+    legend += `<span><span style="color:${d.colour};font-weight:700">●&nbsp;${d.div}</span> ${d.label}${star} &nbsp;<strong style="color:#cbd3e1">${pct}%</strong></span>`;
+  });
+  legend += `</div>`;
+  const source = `<div style="margin-top:8px;font-size:10.5px;color:#6a7488">`+
+    `<span style="color:#f5a623">★</span> = directly energy-exposed (CPI item is gas/electricity/fuel); the other 10 divisions are exposed only via supply-chain pass-through. `+
+    `Source: ONS published CPI weights, 2024 (approximate, parts per 1,000).`+
+    `</div>`;
+  wrap.innerHTML = svg + legend + source;
+}
+
 /* ── Observed PPI trajectories chart (SVG) ────────────────── */
 let ppiData = null;            // observed.json once loaded
 const ppiHidden = new Set();   // codes the user has clicked to hide in the legend
@@ -577,6 +663,7 @@ function render(){
   drawLine(enriched);
   drawBar(enriched);
   drawPpiChart();
+  drawCpiBasket();
 }
 
 document.querySelectorAll("#scen-grp button").forEach(b=>b.addEventListener("click",()=>{
