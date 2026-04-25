@@ -68,6 +68,18 @@ th.gva-col{background:#162133}
 .imp-col{background:rgba(245,166,35,0.05);border-left:1px solid rgba(245,166,35,0.20)}
 th.imp-col{background:#26200f}
 
+/* In-header filter dropdown — sits below the column label, doesn't trigger sort */
+th .th-label{cursor:pointer;display:inline-block}
+select.th-filter{
+  display:block;margin-top:4px;
+  background:#0f1218;color:#cbd3e1;
+  border:1px solid var(--line);border-radius:3px;
+  font-size:10px;padding:1px 4px;cursor:pointer;
+  font-weight:400;max-width:100%;font-family:inherit;
+}
+select.th-filter:hover{border-color:var(--accent)}
+select.th-filter.active{border-color:var(--accent);color:var(--accent)}
+
 /* ── badges ── */
 .badge{display:inline-block;padding:1px 7px;border-radius:999px;font-size:10px;font-weight:700}
 .b-q{background:rgba(239,91,91,.15);color:#ff8383;border:1px solid rgba(239,91,91,.35)}
@@ -95,6 +107,31 @@ th.imp-col{background:#26200f}
 .note{background:var(--panel2);border:1px solid var(--line);border-radius:6px;
       padding:10px 14px;font-size:11px;color:var(--muted);margin-bottom:16px;line-height:1.6}
 .note strong{color:#cbd3e1}
+
+/* ── mobile (iPhone-friendly) ── */
+@media (max-width:600px){
+  header{padding:14px 14px 12px}
+  header h1{font-size:16px;line-height:1.25}
+  header p{font-size:11px;max-width:none}
+  nav.tabs{padding:0 12px;overflow-x:auto;-webkit-overflow-scrolling:touch}
+  nav.tabs a{padding:10px 12px;font-size:12px;white-space:nowrap}
+  main{padding:12px 14px 32px}
+  h2{font-size:13px}
+  section > p{font-size:11px}
+  .ctrl-bar{gap:6px}
+  .ctrl-group button{padding:5px 9px;font-size:11px}
+  input[type=search]{flex:1 1 100%;min-width:0}
+  /* Tables stay scrollable horizontally; tighten interior to lose less to padding */
+  .tbl-wrap{-webkit-overflow-scrolling:touch}
+  table{font-size:11px}
+  th,td{padding:5px 7px}
+  td.num{font-size:10px}
+  th{font-size:10px}
+  /* In-header filter selects should fit narrow columns */
+  select.th-filter{font-size:9.5px}
+  .note{font-size:10.5px;padding:8px 10px}
+  footer{padding:12px 14px;font-size:10px}
+}
 </style>
 </head>
 <body>
@@ -147,12 +184,6 @@ th.imp-col{background:#26200f}
     <div class="ctrl-group" id="exp-mode-grp">
       <button class="active" data-exp-mode="summary">Fuel totals</button>
       <button data-exp-mode="breakdown">Show direct/indirect breakdown</button>
-    </div>
-    <div class="ctrl-group" id="exp-etii-grp" title="Filter by DESNZ ETII status">
-      <button class="active" data-etii-filter="all">All sectors</button>
-      <button data-etii-filter="etii">ETII only</button>
-      <button data-etii-filter="partial">Partial</button>
-      <button data-etii-filter="none">Not ETII</button>
     </div>
     <input type="search" id="search" placeholder="Filter by code or name…"/>
   </div>
@@ -231,8 +262,26 @@ function margin(rho){
 let allData = [];
 let searchTerm = "";
 let expSortKey = "total_share", expSortDir = -1;
-let expMode = "summary";        // summary | breakdown
-let expEtiiFilter = "all";      // all | etii | partial | none
+let expMode = "summary";          // summary | breakdown
+let expEtiiFilter = "all";        // all | etii | partial | none
+let expMarginFilter = "all";      // all | q | m | p
+
+// Per-column dropdown filter options. Keyed by column key — only columns
+// listed here render an in-header select. The "all" option clears the filter.
+const FILTER_OPTS = {
+  etii: [
+    {value:"all",     label:"All"},
+    {value:"etii",    label:"ETII only"},
+    {value:"partial", label:"Partial"},
+    {value:"none",    label:"Not ETII"},
+  ],
+  margin: [
+    {value:"all", label:"All"},
+    {value:"q",   label:"Quantity-led"},
+    {value:"m",   label:"Mixed"},
+    {value:"p",   label:"Price-led"},
+  ],
+};
 
 const EXP_COLS = {
   summary: [
@@ -295,14 +344,30 @@ function renderExpCell(r, col){
   }
 }
 
+function buildFilterSelect(key, currentValue){
+  const opts = FILTER_OPTS[key];
+  if (!opts) return "";
+  const isActive = currentValue !== "all" ? " active" : "";
+  // onclick stop-propagation prevents the click from bubbling up to the
+  // <th> sort handler.
+  return `<select class="th-filter${isActive}" data-filter="${key}" onclick="event.stopPropagation()">` +
+    opts.map(o => `<option value="${o.value}"${o.value === currentValue ? " selected" : ""}>${o.label}</option>`).join("") +
+    `</select>`;
+}
+
 function drawExposures(data){
   const cols = EXP_COLS[expMode];
 
+  // Header — label (clickable to sort) + optional in-header filter select.
   const thead = document.getElementById("exp-thead");
   thead.innerHTML = "<tr>" + cols.map(c => {
     const cls = c.cls ? ` class="${c.cls}"` : "";
     const tip = c.title ? ` title="${c.title.replace(/"/g,'&quot;')}"` : "";
-    return `<th data-k="${c.key}"${cls}${tip}>${c.label}<span class="arr">▾</span></th>`;
+    const filterValue = c.key === "etii"   ? expEtiiFilter
+                      : c.key === "margin" ? expMarginFilter
+                      : null;
+    const filterHTML = filterValue !== null ? buildFilterSelect(c.key, filterValue) : "";
+    return `<th data-k="${c.key}"${cls}${tip}><span class="th-label">${c.label}<span class="arr">▾</span></span>${filterHTML}</th>`;
   }).join("") + "</tr>";
 
   // Sort the active key. 'margin' is presented as a category badge but ranks
@@ -310,15 +375,16 @@ function drawExposures(data){
   const sortVal = (r, k) => (k === "margin" ? (r.rho ?? -Infinity) : (r[k] ?? -Infinity));
 
   const term = searchTerm.toLowerCase();
-  // ETII filter: "etii" matches r.etii === "etii"; "partial" matches "partial";
-  // "none" matches a missing/null etii field; "all" doesn't filter.
   const etiiOk = (r) => {
-    if (expEtiiFilter === "all")     return true;
-    if (expEtiiFilter === "none")    return !r.etii;
+    if (expEtiiFilter === "all")  return true;
+    if (expEtiiFilter === "none") return !r.etii;
     return r.etii === expEtiiFilter;
   };
+  const marginOk = (r) => expMarginFilter === "all" || r.margin_c === expMarginFilter;
+
   const rows = data.map(r => ({...r, margin_c: margin(r.rho)}))
                    .filter(r => etiiOk(r))
+                   .filter(r => marginOk(r))
                    .filter(r => !term || (r.code+" "+r.name).toLowerCase().includes(term));
   rows.sort((a,b)=>{
     const va = sortVal(a, expSortKey), vb = sortVal(b, expSortKey);
@@ -330,23 +396,31 @@ function drawExposures(data){
     `<tr data-code="${r.code}">${cols.map(c => renderExpCell(r, c)).join("")}</tr>`
   ).join("");
 
-  thead.querySelectorAll("th[data-k]").forEach(th => th.addEventListener("click", () => {
-    const k = th.dataset.k;
-    if (expSortKey === k) expSortDir *= -1; else { expSortKey = k; expSortDir = -1; }
-    drawExposures(allData);
-  }));
+  // Sort handlers go on the label span, not the whole th, so clicks on the
+  // filter dropdown beneath don't accidentally toggle sort.
+  thead.querySelectorAll("th[data-k]").forEach(th => {
+    const label = th.querySelector(".th-label");
+    if (label) label.addEventListener("click", () => {
+      const k = th.dataset.k;
+      if (expSortKey === k) expSortDir *= -1; else { expSortKey = k; expSortDir = -1; }
+      drawExposures(allData);
+    });
+  });
+  // Filter selects.
+  thead.querySelectorAll("select.th-filter").forEach(sel => {
+    sel.addEventListener("change", () => {
+      const k = sel.dataset.filter;
+      if (k === "etii")   expEtiiFilter   = sel.value;
+      if (k === "margin") expMarginFilter = sel.value;
+      drawExposures(allData);
+    });
+  });
 }
 
 document.querySelectorAll("#exp-mode-grp button").forEach(b=>b.addEventListener("click",()=>{
   document.querySelectorAll("#exp-mode-grp button").forEach(x=>x.classList.remove("active"));
   b.classList.add("active");
   expMode = b.dataset.expMode;
-  drawExposures(allData);
-}));
-document.querySelectorAll("#exp-etii-grp button").forEach(b=>b.addEventListener("click",()=>{
-  document.querySelectorAll("#exp-etii-grp button").forEach(x=>x.classList.remove("active"));
-  b.classList.add("active");
-  expEtiiFilter = b.dataset.etiiFilter;
   drawExposures(allData);
 }));
 document.getElementById("search").addEventListener("input",e=>{
