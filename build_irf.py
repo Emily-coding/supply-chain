@@ -33,8 +33,10 @@ distinct things:
    industry that buys imported jet kerosene gets a bigger price response
    than the domestic-only IRF would predict). The non-energy → non-energy
    block stays domestic-A. Two scenarios — UNIT (+10% on every energy
-   product) and 2026 (oil +50%, elec +20%, gas +15% — oil-led, calibrated
-   to current 2026 wholesale moves). Two pass-through regimes — FULL
+   product, an elasticity probe) and STRESS (oil +100%, elec +50%,
+   gas +50% — a forward-looking oil-led disturbance, comparable in
+   magnitude to 2022 but with the lead-energy reversed). Two pass-through
+   regimes — FULL
    (ρ=1) and REALISTIC (sector-specific ρ_j, calibrated to Ganapati/
    Shapiro/Walker 2020 and Lafrogne-Joussier/Martin/Méjean 2023). Dynamic
    path built by Neumann series; one expansion round = one quarter.
@@ -61,13 +63,15 @@ ENERGY_CODES = ["C19", "D351", "D352_3"]
 TRANSPORT_CODES = ["H491_2", "H493T495", "H50", "H51", "H52", "H53"]
 HORIZON_QUARTERS = 12
 
-# Scenario shocks (decimal, not pp). UNIT is the elasticity probe; NAMED
-# is calibrated to the wholesale moves we're observing in 2026 — oil
-# leading (~+50% from 2024–25 baseline as supply tightens), electricity
-# and gas modest (UK has rebuilt LNG capacity / interconnectors since
-# 2022). Values are tunable here without touching downstream code.
-SHOCK_UNIT = {"C19": 0.10, "D351": 0.10, "D352_3": 0.10}
-SHOCK_2026 = {"C19": 0.50, "D351": 0.20, "D352_3": 0.15}
+# Scenario shocks (decimal, not pp).
+#   UNIT  is the elasticity probe — +10% on each energy product simultaneously.
+#   STRESS is a forward-looking oil-led disturbance, sized like a Strait of
+#         Hormuz / OPEC+ severe-cut episode: refined oil doubles, gas and
+#         electricity rise 50%. Comparable in magnitude to 2022 but with the
+#         lead-energy reversed. Tunable here; downstream code reads them via
+#         the scen_defs dict in build().
+SHOCK_UNIT   = {"C19": 0.10, "D351": 0.10, "D352_3": 0.10}
+SHOCK_STRESS = {"C19": 1.00, "D351": 0.50, "D352_3": 0.50}
 
 # -----------------------------------------------------------------------------
 # Load GVA + total output per industry from the IOT sheet of the same workbook.
@@ -605,10 +609,10 @@ def build():
 
     # Run scenarios
     scen_defs = [
-        ("unit_full",      SHOCK_UNIT, False),
-        ("unit_realistic", SHOCK_UNIT, True),
-        ("s2026_full",     SHOCK_2026, False),
-        ("s2026_realistic",SHOCK_2026, True),
+        ("unit_full",       SHOCK_UNIT,   False),
+        ("unit_realistic",  SHOCK_UNIT,   True),
+        ("stress_full",     SHOCK_STRESS, False),
+        ("stress_realistic",SHOCK_STRESS, True),
     ]
     scenarios = {}
     for name_, shock, rho in scen_defs:
@@ -635,8 +639,8 @@ def build():
         "transport_codes": TRANSPORT_CODES,
         "n_industries": n,
         "horizon_quarters": HORIZON_QUARTERS,
-        "shock_unit": SHOCK_UNIT,
-        "shock_2026": SHOCK_2026,
+        "shock_unit":   SHOCK_UNIT,
+        "shock_stress": SHOCK_STRESS,
         "methodology": (
             "Leontief price-side IRF: treat energy industries (C19, D351, D352_3) "
             "as exogenous and compute dp_R = (I - A_RR')^-1 A_ER' dp_E for the "

@@ -160,7 +160,7 @@ details[open] summary{margin-bottom:10px}
   <div class="ctrl-bar">
     <div class="ctrl-group" id="scen-grp">
       <button class="active" data-scen="unit">+10% all energy (unit)</button>
-      <button data-scen="s2026">2026 shock (oil +50%, elec +20%, gas +15%)</button>
+      <button data-scen="stress">Oil-led stress (oil +100%, elec +50%, gas +50%)</button>
     </div>
     <div class="ctrl-group" id="pt-grp">
       <button class="active" data-pt="full">Full pass-through</button>
@@ -190,16 +190,16 @@ details[open] summary{margin-bottom:10px}
 
 <!-- ── Observed PPI trajectories ── -->
 <section>
-  <h2>Observed PPI trajectories — what actually happened, 2019 to early 2026</h2>
+  <h2>Observed PPI trajectories — 2021 to early 2026</h2>
   <p style="color:var(--muted);font-size:12px;margin-bottom:10px;max-width:960px">
-  Monthly ONS Output PPI (goods), rebased to <strong>2021-01 = 100</strong>. The
-  pre-pandemic period (2019–2020) sits below 100; the 2022 wholesale shock takes
-  energy series to multiples of baseline; recent moves (2024–2026) show partial
-  reversion plus a renewed oil-led move in early 2026. Energy industries (gas,
-  electricity, refined oil) shown bold; representative downstream industries
-  (industrial gases / fertilisers, iron &amp; steel, food, dairy) shown for context;
-  the output-weighted economy-wide headline shown dashed in white. Click a legend
-  entry to hide / restore that line.
+  Monthly ONS Output PPI (goods), rebased to <strong>2021-01 = 100</strong>.
+  The 2022 wholesale shock takes the energy series to multiples of baseline;
+  2024 onwards shows partial reversion plus a renewed oil-led move in early
+  2026. Energy industries (gas, electricity, refined oil) shown bold;
+  representative downstream industries (industrial gases / fertilisers, iron
+  &amp; steel, food, dairy) for context; the output-weighted economy-wide
+  headline shown dashed in white. Click a legend entry to hide / restore
+  that line.
   </p>
   <div class="chart-box">
     <div id="ppi-chart-wrap"></div>
@@ -253,11 +253,16 @@ details[open] summary{margin-bottom:10px}
   domestically-oriented concentrated sectors. The gap between full and realistic at q12 is the
   portion absorbed via margin compression or output reduction.</p>
 
-  <p><strong>Shock scenarios.</strong> Unit: +10% to each energy product price simultaneously
-  (use this for elasticity-style reasoning — outputs scale linearly).
-  2026-calibrated: refined petroleum +50%, electricity +20%, gas +15% — oil-led, reflecting
-  the wholesale moves we're observing in 2026 (oil supply tightness vs. comparatively
-  stable UK gas/electricity post-2022). Values are tunable in <code>build_irf.py</code>.</p>
+  <p><strong>Shock scenarios.</strong> <em>Unit:</em> +10% on each energy product
+  simultaneously — use this for elasticity-style reasoning (outputs scale linearly,
+  so any other small shock is just a rescale). <em>Oil-led stress:</em> refined
+  petroleum +100%, electricity +50%, gas +50%. A forward-looking disturbance, not a
+  realised move — sized like a Strait of Hormuz / OPEC+ severe-cut episode (oil
+  doubles from ~$80/bbl baseline; utilities co-move via European LNG and the
+  marginal-generator pricing). Comparable in magnitude to 2022 but with the
+  lead-energy reversed: 2022 was gas-led (gas +250% peak, elec +200%, oil +50%);
+  this scenario is oil-led with milder utilities. Values are tunable in
+  <code>build_irf.py</code>.</p>
 
   <p><strong>Adjustment margin classification.</strong> Derived from ρⱼ: ρ ≤ 0.55 → Quantity-led
   (large residual absorbed in output/margins); 0.55 &lt; ρ &lt; 0.85 → Mixed; ρ ≥ 0.85 → Price-led.
@@ -291,7 +296,7 @@ const TRANSPORT_CODES = new Set(["H491_2","H493T495","H50","H51","H52","H53"]);
 // > other. ETII colours match the badge colours used on the exposures page.
 function barCategoryColor(r){
   if (r.etii === "etii")           return "#5ea0ff";   // ETII full — blue (matches .b-etii)
-  if (r.etii === "partial")        return "#7d99c8";   // ETII partial — lighter blue
+  if (r.etii === "partial")        return "#ef5b5b";   // ETII partial — red (matches .b-etii-p)
   if (FOOD_CODES.has(r.code))      return "#2ecc71";   // Food — green
   if (TRANSPORT_CODES.has(r.code)) return "#f5a623";   // Transport — orange
   return "#6a7488";                                    // Everything else — muted grey
@@ -305,7 +310,7 @@ function margin(rho){
 }
 
 let allData = [];
-let scen  = "unit";  // unit | s2026
+let scen  = "unit";  // unit | stress
 let pt    = "full";  // full | realistic
 let qsel  = 4;
 let pinned = new Set();
@@ -329,9 +334,9 @@ function enrichRow(r){
 /* ── Line chart (SVG) ─────────────────────────────────────── */
 function drawLine(data){
   const wrap = document.getElementById("line-chart-wrap");
-  // Right margin widened to leave room for the industry-name end-of-line
-  // labels (previously this was just a 6-char code).
-  const W=720, H=260, ML=44, MR=140, MT=10, MB=36;
+  // No end-of-line labels — the legend below carries the industry names,
+  // so the right gutter can be narrow.
+  const W=680, H=260, ML=44, MR=16, MT=10, MB=36;
   const cw = W-ML-MR, ch = H-MT-MB;
   const QUARTERS = 8;
 
@@ -374,12 +379,7 @@ function drawLine(data){
     const d = pts.map((p,i)=>(i===0?"M":"L")+p[0].toFixed(1)+","+p[1].toFixed(1)).join(" ");
     const bold = pinned.has(code) ? "3" : "1.5";
     svg += `<path d="${d}" fill="none" stroke="${col}" stroke-width="${bold}" stroke-linejoin="round"/>`;
-    const [lx,ly] = pts[pts.length-1];
-    // End-of-line label: use the (already shortened) industry name, capped at
-    // 22 chars so it fits the right-margin gutter without bumping into siblings.
-    const fullName = (row.name || code).trim();
-    const label = fullName.length > 22 ? fullName.slice(0,22)+"…" : fullName;
-    svg += `<text x="${lx+4}" y="${ly+4}" font-size="9" fill="${col}">${label}</text>`;
+    // End-of-line label removed — names are in the legend below.
   });
   svg += `</svg>`;
 
@@ -430,7 +430,7 @@ function drawBar(data){
   // Colour-key for the bar categories. Sits below the bars.
   const key = `<div style="display:flex;flex-wrap:wrap;gap:10px;margin-top:6px;font-size:10px">`+
     `<span style="color:#5ea0ff">● ETII</span>`+
-    `<span style="color:#7d99c8">● ETII partial</span>`+
+    `<span style="color:#ef5b5b">● ETII partial</span>`+
     `<span style="color:#2ecc71">● Food</span>`+
     `<span style="color:#f5a623">● Transport</span>`+
     `<span style="color:#6a7488">● Other</span>`+
@@ -465,9 +465,13 @@ function drawPpiChart(){
 
   // Use the union of months across the energy series so the x-axis is canonical
   // even if some sparser series are missing the very last month.
+  // Display window starts at PPI_DISPLAY_START — observed.json carries 2019+
+  // for context, but the chart shows from 2021-Q1 onwards (the natural
+  // post-pandemic baseline before the 2022 shock).
+  const PPI_DISPLAY_START = "2021-01";
   const monthSet = new Set();
   ["D351","D352_3","C19"].forEach(c => Object.keys(ppiData.ppi_index_by_ioat?.[c] || {}).forEach(m => monthSet.add(m)));
-  const months = [...monthSet].sort();
+  const months = [...monthSet].sort().filter(m => m >= PPI_DISPLAY_START);
   if (!months.length) {
     wrap.innerHTML = `<p style="color:var(--muted);font-size:11px">observed.json missing or empty — run <code>python3 build_observed.py</code> to regenerate.</p>`;
     return;
@@ -520,7 +524,7 @@ function drawPpiChart(){
                       .filter(p => p[1] != null && !isNaN(p[1]));
     if (pts.length < 2) return;
     const d = pts.map((p,i)=>(i===0?"M":"L")+p[0].toFixed(1)+","+p[1].toFixed(1)).join(" ");
-    const sw   = s.bold ? 2.5 : 1.5;
+    const sw   = s.bold ? 1.6 : 0.9;     // thinner — was 2.5 / 1.5
     const dash = s.dashed ? ` stroke-dasharray="6,3"` : "";
     svg += `<path d="${d}" fill="none" stroke="${s.color}" stroke-width="${sw}"${dash} stroke-linejoin="round"/>`;
     const last = pts[pts.length-1];
@@ -591,8 +595,8 @@ Promise.all([
   // Read scenario shocks from the JSON so the data-note can never drift from
   // the values build_irf.py actually used.
   const fmtShockPct = v => v == null ? "—" : `+${(v*100).toFixed(0)}%`;
-  const s2026 = irf.shock_2026 || {};
-  const s2026Text = `oil ${fmtShockPct(s2026.C19)}, elec ${fmtShockPct(s2026.D351)}, gas ${fmtShockPct(s2026.D352_3)}`;
+  const stress = irf.shock_stress || {};
+  const stressText = `oil ${fmtShockPct(stress.C19)}, elec ${fmtShockPct(stress.D351)}, gas ${fmtShockPct(stress.D352_3)}`;
 
   const obsBlurb = ppiData
     ? `<strong>Observed PPI:</strong> ${Object.keys(ppiData.ppi_index_by_ioat||{}).length} industries, ${ppiData.window?.start} → ${ppiData.window?.end}`
@@ -600,7 +604,7 @@ Promise.all([
 
   document.getElementById("meta-note").innerHTML =
     `<strong>IRF model:</strong> ONS 2023 IxI, ${irf.n_industries} industries; A<sub>ER</sub> includes imports of energy products. `+
-    `<strong>Scenarios:</strong> +10% unit shock; 2026 shock — ${s2026Text}. `+
+    `<strong>Scenarios:</strong> +10% unit shock; oil-led stress — ${stressText}. `+
     obsBlurb + `.`;
 
   render();

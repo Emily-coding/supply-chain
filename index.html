@@ -86,7 +86,7 @@ select.th-filter.active{border-color:var(--accent);color:var(--accent)}
 .b-m{background:rgba(245,166,35,.15);color:#ffc266;border:1px solid rgba(245,166,35,.35)}
 .b-p{background:rgba(46,204,113,.15);color:#6fe3a2;border:1px solid rgba(46,204,113,.35)}
 .b-etii{background:rgba(94,160,255,.18);color:#a3c5ff;border:1px solid rgba(94,160,255,.45)}
-.b-etii-p{background:rgba(94,160,255,.08);color:#7d99c8;border:1px solid rgba(94,160,255,.25);font-style:italic}
+.b-etii-p{background:rgba(239,91,91,.12);color:#ff8383;border:1px solid rgba(239,91,91,.40);font-style:italic}
 
 /* CSS hover tooltip — shows immediately, unlike the browser-native delayed title */
 .tip{position:relative;cursor:help}
@@ -155,28 +155,9 @@ select.th-filter.active{border-color:var(--accent);color:var(--accent)}
 </header>
 <main>
 
-<!-- ── data note ── -->
-<div class="note" id="meta-note">Loading ONS IxI data…</div>
-
 <!-- ── exposures table — direct + indirect energy by SIC ── -->
 <section id="exposures">
   <h2>Supply-chain energy exposures by SIC — direct + indirect</h2>
-  <p style="color:var(--muted);font-size:12px;margin-bottom:10px;max-width:960px">
-  Each row is one of the 101 IOAT industries. All percentages are share of that
-  industry's gross output at basic prices, except the blue-tinted column which is share
-  of GVA. <strong>Gas / Elec / Oil</strong> are the total embedded energy share —
-  what the industry buys directly (UK energy industries plus imported jet kerosene,
-  marine bunker, diesel, etc.) <em>plus</em> what's embedded in everything else it buys
-  through the UK domestic supply chain. Click <em>Show direct/indirect breakdown</em>
-  to split each total into its direct and indirect parts.
-  <strong>Gas+Elec / GVA</strong> rebases direct gas and electricity to value added — this
-  matches the DESNZ ETII formula; in this dataset the 80th-percentile threshold is
-  about 8.3%. <strong>Imp%</strong> is the share of an industry's intermediate spending
-  that is imported, used as a flag for the part of the upstream supply chain we can't
-  track (see callout below). The <strong>Adjustment margin</strong> badge says whether
-  an industry is more likely to raise prices or cut output when energy gets more
-  expensive; hover for the ρ value behind it.
-  </p>
 
   <div class="ctrl-bar" style="margin-bottom:8px">
     <div class="ctrl-group" id="exp-mode-grp">
@@ -219,25 +200,54 @@ select.th-filter.active{border-color:var(--accent);color:var(--accent)}
   in efficiency</em>.
   </div>
 
-  <!-- Upstream-undercount callout — industries where the residual MRIO gap matters most -->
-  <div class="note" style="border-color:rgba(245,166,35,0.5)">
-  <strong style="color:#ffc266">What this table doesn't capture — the upstream supply-chain gap.</strong>
-  Imports of energy products (jet kerosene, marine bunker, diesel, imported gas,
-  electricity interconnector) are added to each industry's direct cost share and
-  propagate through the UK domestic supply chain — so imported jet fuel bought by
-  UK airlines correctly flows on to industries that buy air-transport services.
-  What is <em>not</em> captured is the energy embedded in imported <em>non-energy</em>
-  goods — Chinese steel, German chemicals, Asian electronics. Tracking that would
-  need a multi-region input-output table (OECD-ICIO, Eora) and is out of scope here.
-  <br><br>
-  The <strong>Imp%</strong> column is a flag for how big this gap is likely to be
-  for any given industry: it is the share of the industry's intermediate spending
-  that is imported. <strong>Sort the table by Imp% descending</strong> to find the
-  most affected industries — aircraft repair sits at the top around 70%, then a
-  block of chemicals, plastics, basic metals, motor vehicles and machinery in the
-  40–55% range; electronics is just behind at the mid-30s.
-  Hardt et al. (2018) estimate the average UK industrial uplift from a full MRIO
-  treatment at 20–30%, concentrated in this high-import-intensity tail.
+</section>
+
+<!-- ── About this table — source, column guide, and upstream-gap caveat in one section ── -->
+<section id="notes" style="margin-top:32px;border-top:1px solid var(--line);padding-top:20px">
+  <h2>About this table</h2>
+
+  <div class="note" id="meta-note" style="line-height:1.6;font-size:12px;max-width:960px">
+    <p><strong>Source.</strong> <span id="meta-source">Loading ONS IxI data…</span></p>
+
+    <p style="margin-top:10px">
+    Each row is one of the IOAT industries. All percentages are share of that industry's
+    gross output at basic prices, except the blue-tinted column which is share of GVA.
+    <strong>Gas / Elec / Oil</strong> show the total embedded energy share — what the
+    industry buys directly (from UK energy industries plus imported jet kerosene, marine
+    bunker, diesel, gas and electricity) <em>plus</em> what's embedded in everything else
+    it buys through the UK domestic supply chain. Click <em>Show direct/indirect
+    breakdown</em> to split each total into its direct and indirect parts.
+    <strong>Gas+Elec / GVA</strong> rebases direct gas and electricity to value added —
+    this matches the DESNZ ETII formula; in this dataset the 80th-percentile threshold is
+    about 8.3%. <strong>Imp%</strong> is the share of an industry's intermediate spending
+    that is imported — used as a flag for the part of the upstream supply chain we can't
+    track (see below). The <strong>Adjustment margin</strong> badge says whether an
+    industry is more likely to raise prices or cut output when energy gets more
+    expensive; hover for the ρ value behind it.
+    </p>
+
+    <h3 style="font-size:12px;font-weight:600;color:#cbd3e1;margin-top:14px;margin-bottom:6px">
+      What this table doesn't capture — the upstream supply-chain gap
+    </h3>
+    <p>
+    Imports of energy products (jet kerosene, marine bunker, diesel, imported gas,
+    electricity interconnector) are added to each industry's direct cost share and
+    propagate through the UK domestic supply chain — so imported jet fuel bought by
+    UK airlines correctly flows on to industries that buy air-transport services.
+    What is <em>not</em> captured is the energy embedded in imported <em>non-energy</em>
+    goods — Chinese steel, German chemicals, Asian electronics. Tracking that would
+    need a multi-region input-output table (OECD-ICIO, Eora) and is out of scope here.
+    </p>
+    <p style="margin-top:8px">
+    The <strong>Imp%</strong> column is a flag for how big this gap is likely to be
+    for any given industry: it is the share of the industry's intermediate spending
+    that is imported. <strong>Sort the table by Imp% descending</strong> to find the
+    most affected industries — aircraft repair sits at the top around 70%, then a
+    block of chemicals, plastics, basic metals, motor vehicles and machinery in the
+    40–55% range; electronics is just behind at the mid-30s.
+    Hardt et al. (2018) estimate the average UK industrial uplift from a full MRIO
+    treatment at 20–30%, concentrated in this high-import-intensity tail.
+    </p>
   </div>
 </section>
 
@@ -442,15 +452,16 @@ fetch("data/irf.json?t=" + Date.now())
   .then(r=>r.json())
   .then(d=>{
     allData = d.industries;
-    document.getElementById("meta-note").innerHTML =
-      `<strong>Source:</strong> ONS 2023 Input-Output Analytical Tables, ${d.industries.length} non-energy industries (the three UK energy industries are excluded since they're upstream of every other row). `+
+    document.getElementById("meta-source").innerHTML =
+      `ONS 2023 Input-Output Analytical Tables, ${d.industries.length} non-energy industries `+
+      `(the three UK energy industries — refined petroleum, electricity, gas — are excluded since they're upstream of every other row). `+
       `Direct shares add UK-domestic energy purchases plus imported refined petroleum, gas and electricity. `+
       `Indirect shares trace through the UK supply chain via the Leontief inverse.`;
     drawExposures(allData);
   })
   .catch(e=>{
-    document.getElementById("meta-note").innerHTML =
-      `<strong style="color:#ef5b5b">Error loading data/irf.json:</strong> ${e.message}. `+
+    document.getElementById("meta-source").innerHTML =
+      `<span style="color:#ef5b5b">Error loading data/irf.json: ${e.message}.</span> `+
       `Run <code>python3 build_irf.py</code> from the repo root to regenerate it.`;
   });
 </script>
