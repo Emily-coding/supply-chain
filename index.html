@@ -77,6 +77,19 @@ th.imp-col{background:#26200f}
 .b-i{background:rgba(122,111,255,.15);color:#a59aff;border:1px solid rgba(122,111,255,.35)}
 .b-etii{background:rgba(94,160,255,.18);color:#a3c5ff;border:1px solid rgba(94,160,255,.45)}
 .b-etii-p{background:rgba(94,160,255,.08);color:#7d99c8;border:1px solid rgba(94,160,255,.25);font-style:italic}
+
+/* CSS hover tooltip — shows immediately, unlike the browser-native delayed title */
+.tip{position:relative;cursor:help}
+.tip::after{
+  content:attr(data-tip);
+  position:absolute; bottom:calc(100% + 6px); left:50%; transform:translateX(-50%);
+  background:#0b0d13; color:#e6e9f0; padding:6px 10px; border-radius:5px;
+  border:1px solid var(--line); font-size:11px; line-height:1.4; font-weight:400;
+  white-space:normal; width:max-content; max-width:340px; text-align:left;
+  opacity:0; pointer-events:none; transition:opacity .12s;
+  z-index:50;
+}
+.tip:hover::after{opacity:1}
 .heat{display:inline-block;padding:1px 7px;border-radius:3px;font-size:11px;
       font-family:ui-monospace,monospace;font-weight:600}
 
@@ -173,6 +186,12 @@ details[open] summary{margin-bottom:10px}
     <div class="ctrl-group" id="exp-mode-grp">
       <button class="active" data-exp-mode="summary">Fuel totals</button>
       <button data-exp-mode="breakdown">Show direct/indirect breakdown</button>
+    </div>
+    <div class="ctrl-group" id="exp-etii-grp" title="Filter by DESNZ ETII status">
+      <button class="active" data-etii-filter="all">All sectors</button>
+      <button data-etii-filter="etii">ETII only</button>
+      <button data-etii-filter="partial">Partial</button>
+      <button data-etii-filter="none">Not ETII</button>
     </div>
   </div>
 
@@ -341,7 +360,8 @@ let sortKey = "irf_q4", sortDir = -1;
 // Independent sort for the exposures table — the question it answers is
 // different (cost share rather than IRF dynamics) so the sort persists separately.
 let expSortKey = "total_share", expSortDir = -1;
-let expMode = "summary";  // summary | breakdown
+let expMode = "summary";        // summary | breakdown
+let expEtiiFilter = "all";      // all | etii | partial | none
 let pinned = new Set();
 
 // Column definitions for each exposures-table mode. Single source of truth so
@@ -566,8 +586,8 @@ function renderExpCell(r, col){
       const band = (r.margin_c === "q") ? "ρ ≤ 0.55"
                  : (r.margin_c === "m") ? "0.55 < ρ < 0.85"
                  : "ρ ≥ 0.85";
-      const tip = `${MARGIN_LABEL[r.margin_c]} — assigned ρ = ${r.rho.toFixed(2)} (band: ${band}). Calibrated from Ganapati/Shapiro/Walker (AEJ Applied 2020) and Lafrogne-Joussier/Martin/Méjean (CEPII 2023): ~70% pass-through avg US mfg, &lt;70% in trade-exposed commodity, ≥100% in concentrated/domestic sectors.`;
-      return `<td class="${col.cls||""}"><span class="badge ${MARGIN_CLASS[r.margin_c]}" title="${tip.replace(/"/g,'&quot;')}">${MARGIN_LABEL[r.margin_c]}</span></td>`;
+      const tip = `Assigned ρ = ${r.rho.toFixed(2)} — band ${band}. Calibrated from Ganapati/Shapiro/Walker (AEJ Applied 2020) and Lafrogne-Joussier/Martin/Méjean (CEPII 2023).`;
+      return `<td class="${col.cls||""}"><span class="badge tip ${MARGIN_CLASS[r.margin_c]}" data-tip="${tip.replace(/"/g,'&quot;')}">${MARGIN_LABEL[r.margin_c]}</span></td>`;
     }
     case "etii": {
       const status = r.etii;
@@ -603,7 +623,15 @@ function drawExposures(data){
   const sortVal = (r, k) => (k === "margin" ? (r.rho ?? -Infinity) : (r[k] ?? -Infinity));
 
   const term = searchTerm.toLowerCase();
+  // ETII filter: "etii" matches r.etii === "etii"; "partial" matches "partial";
+  // "none" matches a missing/null etii field; "all" doesn't filter.
+  const etiiOk = (r) => {
+    if (expEtiiFilter === "all")     return true;
+    if (expEtiiFilter === "none")    return !r.etii;
+    return r.etii === expEtiiFilter;
+  };
   const rows = data.map(r => ({...r, margin_c: margin(r.rho)}))
+                   .filter(r => etiiOk(r))
                    .filter(r => !term || (r.code+" "+r.name).toLowerCase().includes(term));
   rows.sort((a,b)=>{
     const va = sortVal(a, expSortKey), vb = sortVal(b, expSortKey);
@@ -664,6 +692,12 @@ document.querySelectorAll("#exp-mode-grp button").forEach(b=>b.addEventListener(
   document.querySelectorAll("#exp-mode-grp button").forEach(x=>x.classList.remove("active"));
   b.classList.add("active");
   expMode = b.dataset.expMode;
+  render();
+}));
+document.querySelectorAll("#exp-etii-grp button").forEach(b=>b.addEventListener("click",()=>{
+  document.querySelectorAll("#exp-etii-grp button").forEach(x=>x.classList.remove("active"));
+  b.classList.add("active");
+  expEtiiFilter = b.dataset.etiiFilter;
   render();
 }));
 
