@@ -205,8 +205,16 @@ details.box .box-body{padding:0 16px 14px;font-size:12px;color:var(--muted);line
     less than 70% in commodity / trade-exposed segments. French firm-level data
     (Lafrogne-Joussier, Martin &amp; Méjean, CEPII 2023): closer to 100% on
     energy costs when firms reset prices, up to 115% in the least-competitive
-    sectors (excess pass-through under market power). Bank of England (2023)
-    finds UK aggregate pass-through is gradual, incomplete and asymmetric.</p>
+    sectors (excess pass-through under market power).
+    <strong>UK-specific:</strong> Bank of England / Bank Underground (2023) runs
+    error-correction models on PPI / SPPI for ~70 sectors back to 1997 — long-run
+    pass-through ≈ <strong>0.8 for manufacturing</strong> and <strong>0.4 for
+    services</strong>; manufacturing reaches 80% of long-run in ~8 quarters,
+    services in ~15; cost falls pass through ~2 quarters more slowly than rises.
+    <strong>EU ETS ex-post evidence</strong> (Cambridge EPRG / CE Delft /
+    Öko-Institut, 2019–20) gives sector-specific carbon-cost pass-through bands —
+    refining 80–100%, iron &amp; steel 55–85%, cement 20–40%, chemicals /
+    fertilisers high but with wide confidence intervals.</p>
     <p style="margin-top:8px"><strong>Quantity margin — how firms cut their own
     energy use.</strong> French manufacturing (Marin &amp; Vona, Eur. Econ. Rev.
     2021): price elasticity of demand ≈ −0.4 for electricity and −0.9 for gas;
@@ -337,7 +345,7 @@ const EXP_COLS = {
     {key:"gas_elec_direct_gva", label:"Gas+Elec /<br>GVA",   title:"Direct (UK + imp) gas + electricity / GVA — DESNZ ETII metric (80th-percentile cutoff ≈ 8.3% in this dataset)", cls:"gva-col", fmt:"heatGVA"},
     {key:"import_intensity",    label:"Imp%",      title:"Imports as share of j's intermediate input spending — flag for unmeasured upstream supply chain (foreign embodied energy in imported non-energy intermediates)", cls:"imp-col", fmt:"pct"},
     {key:"etii",                label:"DESNZ<br>ETII",  title:"DESNZ ETII status (Jan 2023 list, mapped from 4-digit SIC to IOAT bucket): ETII = whole bucket on list; Partial = some sub-codes on list; — = none on list", fmt:"etii"},
-    {key:"margin",              label:"Adjustment margin",  title:"Likely adjustment margin under an energy-cost shock, derived from a sector-specific pass-through coefficient ρ calibrated to Ganapati/Shapiro/Walker (AEJ Applied 2020) and Lafrogne-Joussier/Martin/Méjean (CEPII 2023). ρ ≤ 0.55 → Quantity-led; 0.55 < ρ < 0.85 → Mixed; ρ ≥ 0.85 → Price-led.", fmt:"margin"},
+    {key:"margin",              label:"Adjustment margin",  title:"Quantity-led ρ ≤ 0.55, Mixed 0.55–0.85, Price-led ρ ≥ 0.85. Hover any badge for the assigned ρ.", fmt:"margin"},
   ],
   breakdown: [
     {key:"code",                label:"Code",                                       fmt:"code"},
@@ -352,7 +360,7 @@ const EXP_COLS = {
     {key:"gas_elec_direct_gva", label:"Gas+Elec /<br>GVA",   title:"Direct (UK + imp) gas + electricity / GVA — DESNZ ETII metric (80th-percentile cutoff ≈ 8.3% in this dataset)", cls:"gva-col", fmt:"heatGVA"},
     {key:"import_intensity",    label:"Imp%",      title:"Imports as share of j's intermediate input spending — flag for unmeasured upstream supply chain", cls:"imp-col", fmt:"pct"},
     {key:"etii",                label:"DESNZ<br>ETII",  title:"DESNZ ETII status (Jan 2023 list, mapped from 4-digit SIC to IOAT bucket)", fmt:"etii"},
-    {key:"margin",              label:"Adjustment margin",  title:"Likely adjustment margin derived from sector-specific pass-through ρ (Ganapati 2020, LMM 2023). Quantity-led ρ ≤ 0.55, Mixed 0.55–0.85, Price-led ≥ 0.85.", fmt:"margin"},
+    {key:"margin",              label:"Adjustment margin",  title:"Quantity-led ρ ≤ 0.55, Mixed 0.55–0.85, Price-led ρ ≥ 0.85. Hover any badge for the assigned ρ.", fmt:"margin"},
   ],
 };
 
@@ -363,11 +371,8 @@ function renderExpCell(r, col){
     case "name":   return `<td class="name-cell${cls}">${r.name}</td>`;
     case "rho":    return `<td class="num${cls}">${r.rho.toFixed(2)}</td>`;
     case "margin": {
-      const band = (r.margin_c === "q") ? "ρ ≤ 0.55"
-                 : (r.margin_c === "m") ? "0.55 < ρ < 0.85"
-                 : "ρ ≥ 0.85";
-      const tip = `Assigned ρ = ${r.rho.toFixed(2)} — band ${band}. Calibrated from Ganapati/Shapiro/Walker (AEJ Applied 2020) and Lafrogne-Joussier/Martin/Méjean (CEPII 2023).`;
-      return `<td class="${col.cls||""}"><span class="badge tip ${MARGIN_CLASS[r.margin_c]}" data-tip="${tip.replace(/"/g,'&quot;')}">${MARGIN_LABEL[r.margin_c]}</span></td>`;
+      const tip = `ρ = ${r.rho.toFixed(2)}`;
+      return `<td class="${col.cls||""}"><span class="badge tip ${MARGIN_CLASS[r.margin_c]}" data-tip="${tip}">${MARGIN_LABEL[r.margin_c]}</span></td>`;
     }
     case "etii": {
       const status = r.etii;

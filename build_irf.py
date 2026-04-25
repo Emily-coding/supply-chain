@@ -372,35 +372,59 @@ ETII_STATUS = {
 }
 
 
+# Sector-specific pass-through coefficients ρ_j. Calibrated against:
+#   - Ganapati, Shapiro & Walker (AEJ Applied 2020): US manufacturing average
+#     ~70%, range from <70% in commodity / trade-exposed segments to >100%
+#     in concentrated industries.
+#   - Lafrogne-Joussier, Martin & Méjean (CEPII 2023): French firm-level,
+#     ~100% on energy costs in the 2020–22 episode, ~115% in least-competitive
+#     sectors. Channel ranking: cut energy → raise prices → switch imports →
+#     shift plants → invest in efficiency.
+#   - Bank of England / Bank Underground (2023): UK PPI/SPPI sector
+#     regressions 1997+. Long-run input-cost pass-through ~0.8 for
+#     manufacturing, ~0.4 for services. Manufacturing reaches 80% of the
+#     long-run pass-through in ~8 quarters; services in ~15. Asymmetry of
+#     ~2 quarters longer when costs are falling.
+#   - Cambridge EPRG NTS1935 / CE Delft / Öko-Institut (2019–20): EU ETS
+#     ex-post pass-through bands by sector — refining 80–100%, iron &
+#     steel 55–85%, cement 20–40%, chemicals/fertilisers high but
+#     uncertain. Ex-post additional EU industrial profits from carbon
+#     pass-through estimated at €26–46bn over 2008–2019.
+#
+# UK-specific overlay: trade exposure (steel exports ~45%, imports >60%
+# of demand; ETII list) and market-power judgements pull commodity-EII
+# values to the bottom of the international bands; transport-protected
+# domestic sectors (cement, food) get higher ρs reflecting LMM and
+# UK-observed pass-through during 2022.
 RHO_OVERRIDES = {
     # Heavily trade-exposed EII commodity manufacturing
-    "C241T243": 0.35,   # Basic iron & steel
-    "C244_5":   0.35,   # Other basic metals (incl. aluminium)
+    "C241T243": 0.50,   # Basic iron & steel — centre of EU ETS 0.55–0.85 band; UK at low end given Tata closures
+    "C244_5":   0.50,   # Other basic metals (incl. aluminium) — same reasoning
     "C20A":     0.40,   # Industrial gases, inorganics, fertilisers
-    "C20B":     0.50,   # Petrochemicals
+    "C20B":     0.65,   # Petrochemicals — EU ETS / chemicals literature suggests mid-band
     "C20C":     0.55,   # Dyestuffs, agrochemicals
     "C17":      0.55,   # Paper & paper products
-    "C235_6":   0.80,   # Cement, lime, plaster (transport-protected domestically)
+    "C235_6":   0.80,   # Cement, lime, plaster (transport-protected domestically; consistent with BoE 0.8 mfg)
     "C23OTHER": 0.50,   # Glass, ceramics, refractories
     "C13":      0.55,   # Textiles
     "C14":      0.55,   # Wearing apparel
     "C15":      0.50,   # Leather
     "C16":      0.60,   # Wood & wood products
     "C22":      0.70,   # Rubber & plastics
-    "C19":      0.90,   # Refined petroleum (duopoly-ish, pass-through high; NB
-                        # shocked directly — rho only matters for own-inertia)
+    "C19":      0.90,   # Refined petroleum (EU ETS literature: refining 80–100%; shocked directly)
     # Concentrated / differentiated / strong pricing power
     "C101":     1.00, "C102_3": 1.00, "C104": 1.00, "C105": 1.00,
     "C106":     1.00, "C107": 1.00, "C108": 1.00, "C109": 1.00,
-    "C1101T1106 & C12": 1.00, "C1107": 1.00,   # Food & beverages
+    "C1101T1106 & C12": 1.00, "C1107": 1.00,   # Food & beverages — LMM + ONS 2025
     "C21":      0.95,  # Pharmaceuticals
     "D351":     1.00,  # Electricity (regulated pass-through)
     "D352_3":   1.00,
     # Utilities / non-tradeable
     "E36": 1.00, "E37": 1.00, "E38": 0.95, "E39": 0.95,
     "F41, F42  & F43": 0.90,  # Construction
-    # Services — generally strong pass-through (LMM)
-    # default handles these at 0.90 below
+    # Services default 0.90: anchored on LMM's energy-specific finding
+    # rather than BoE's 0.4 (which is long-run for general input costs;
+    # energy is a faster-passing supply-side shock).
 }
 def rho_for(code: str) -> float:
     return RHO_OVERRIDES.get(code, 0.90)
