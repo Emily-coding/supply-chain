@@ -108,6 +108,26 @@ select.th-filter.active{border-color:var(--accent);color:var(--accent)}
       padding:10px 14px;font-size:11px;color:var(--muted);margin-bottom:16px;line-height:1.6}
 .note strong{color:#cbd3e1}
 
+/* ── collapsible details boxes ── */
+details.box{background:var(--panel);border:1px solid var(--line);border-radius:8px;
+            padding:0;margin-bottom:14px;overflow:hidden}
+details.box summary{cursor:pointer;font-weight:600;font-size:13px;color:#cbd3e1;
+                    padding:12px 16px;list-style:none;user-select:none}
+details.box summary::-webkit-details-marker{display:none}
+details.box summary::before{content:"▸";color:var(--muted);margin-right:8px;
+                            display:inline-block;transition:transform .15s}
+details.box[open] summary::before{transform:rotate(90deg)}
+details.box summary:hover{color:var(--accent)}
+details.box .box-body{padding:0 16px 14px;font-size:12px;color:var(--muted);line-height:1.6;max-width:960px}
+
+/* ── row-limit toggle below the table ── */
+.row-toggle{
+  background:var(--panel);color:var(--accent);
+  border:1px solid var(--line);border-radius:6px;
+  padding:6px 14px;font-size:12px;font-weight:500;cursor:pointer;
+}
+.row-toggle:hover{border-color:var(--accent);background:#1b2030}
+
 /* ── mobile (iPhone-friendly) ── */
 @media (max-width:600px){
   header{padding:14px 14px 12px}
@@ -173,40 +193,41 @@ select.th-filter.active{border-color:var(--accent);color:var(--accent)}
       <tbody id="exp-tbody"></tbody>
     </table>
   </div>
+  <div id="exp-row-toggle" style="margin-top:10px"></div>
 
-  <!-- Literature panel -->
-  <div class="note" style="margin-top:10px">
-  <strong>What the literature says about how firms respond to energy shocks.</strong>
-  <br><br>
-  <strong>Price pass-through.</strong> US manufacturing micro-data (Ganapati,
-  Shapiro &amp; Walker, AEJ Applied 2020): firms pass through about 70% of
-  energy-cost rises on average — more than 100% in concentrated industries,
-  less than 70% in commodity / trade-exposed segments. French firm-level data
-  (Lafrogne-Joussier, Martin &amp; Méjean, CEPII 2023): closer to 100% on
-  energy costs when firms reset prices, up to 115% in the least-competitive
-  sectors (excess pass-through under market power). Bank of England (2023)
-  finds UK aggregate pass-through is gradual, incomplete and asymmetric.
-  <br><br>
-  <strong>Quantity margin — how firms cut their own energy use.</strong>
-  French manufacturing (Marin &amp; Vona, Eur. Econ. Rev. 2021): price
-  elasticity of demand ≈ −0.4 for electricity and −0.9 for gas; smaller in
-  absolute value (−0.2 and −0.7) under the very large 2022 shock. Meta-analysis
-  of 428 studies (Labandeira, Labeaga &amp; López-Otero, Energy Policy 2017):
-  short-run ≈ −0.21, long-run ≈ −0.61. OECD industrial-electricity panels
-  (Adeyemi/Hunt-style): short-run −0.11 to −0.24, long-run −0.11 to −0.28;
-  output elasticity ≈ 0.5. Lafrogne-Joussier et al. rank the channels firms
-  actually use: <em>cut energy input</em> → <em>raise prices</em> → <em>switch
-  to imported inputs</em> → <em>shift production across plants</em> → <em>invest
-  in efficiency</em>.
-  </div>
+  <!-- Literature panel — collapsible -->
+  <details class="box" style="margin-top:10px">
+    <summary>What the literature says about how firms respond to energy shocks</summary>
+    <div class="box-body">
+    <p><strong>Price pass-through.</strong> US manufacturing micro-data (Ganapati,
+    Shapiro &amp; Walker, AEJ Applied 2020): firms pass through about 70% of
+    energy-cost rises on average — more than 100% in concentrated industries,
+    less than 70% in commodity / trade-exposed segments. French firm-level data
+    (Lafrogne-Joussier, Martin &amp; Méjean, CEPII 2023): closer to 100% on
+    energy costs when firms reset prices, up to 115% in the least-competitive
+    sectors (excess pass-through under market power). Bank of England (2023)
+    finds UK aggregate pass-through is gradual, incomplete and asymmetric.</p>
+    <p style="margin-top:8px"><strong>Quantity margin — how firms cut their own
+    energy use.</strong> French manufacturing (Marin &amp; Vona, Eur. Econ. Rev.
+    2021): price elasticity of demand ≈ −0.4 for electricity and −0.9 for gas;
+    smaller in absolute value (−0.2 and −0.7) under the very large 2022 shock.
+    Meta-analysis of 428 studies (Labandeira, Labeaga &amp; López-Otero, Energy
+    Policy 2017): short-run ≈ −0.21, long-run ≈ −0.61. OECD industrial-electricity
+    panels (Adeyemi/Hunt-style): short-run −0.11 to −0.24, long-run −0.11 to
+    −0.28; output elasticity ≈ 0.5. Lafrogne-Joussier et al. rank the channels
+    firms actually use: <em>cut energy input</em> → <em>raise prices</em> →
+    <em>switch to imported inputs</em> → <em>shift production across plants</em>
+    → <em>invest in efficiency</em>.</p>
+    </div>
+  </details>
 
 </section>
 
-<!-- ── About this table — source, column guide, and upstream-gap caveat in one section ── -->
-<section id="notes" style="margin-top:32px;border-top:1px solid var(--line);padding-top:20px">
-  <h2>About this table</h2>
-
-  <div class="note" id="meta-note" style="line-height:1.6;font-size:12px;max-width:960px">
+<!-- ── About this table — collapsible ── -->
+<section id="notes" style="margin-top:24px">
+  <details class="box">
+    <summary>About this table — source, column guide and what's not captured</summary>
+    <div class="box-body" id="meta-note" style="font-size:12px;line-height:1.6;max-width:960px">
     <p><strong>Source.</strong> <span id="meta-source">Loading ONS IxI data…</span></p>
 
     <p style="margin-top:10px">
@@ -248,7 +269,8 @@ select.th-filter.active{border-color:var(--accent);color:var(--accent)}
     Hardt et al. (2018) estimate the average UK industrial uplift from a full MRIO
     treatment at 20–30%, concentrated in this high-import-intensity tail.
     </p>
-  </div>
+    </div>
+  </details>
 </section>
 
 </main>
@@ -284,6 +306,8 @@ let expSortKey = "total_share", expSortDir = -1;
 let expMode = "summary";          // summary | breakdown
 let expEtiiFilter = "all";        // all | etii | partial | none
 let expMarginFilter = "all";      // all | q | m | p
+let expShowAll = false;           // false → show first 30 rows; true → show every matched row
+const ROW_LIMIT = 30;
 
 // Per-column dropdown filter options. Keyed by column key — only columns
 // listed here render an in-header select. The "all" option clears the filter.
@@ -411,9 +435,28 @@ function drawExposures(data){
     return expSortDir*(va-vb);
   });
 
-  document.getElementById("exp-tbody").innerHTML = rows.map(r =>
+  // Apply the row-limit so the table stays compact by default; the toggle
+  // below lets the user expand to all matched rows.
+  const totalMatched = rows.length;
+  const visible = expShowAll ? rows : rows.slice(0, ROW_LIMIT);
+  document.getElementById("exp-tbody").innerHTML = visible.map(r =>
     `<tr data-code="${r.code}">${cols.map(c => renderExpCell(r, c)).join("")}</tr>`
   ).join("");
+
+  // Toggle below the table: only shown when there are more rows than the limit
+  const toggle = document.getElementById("exp-row-toggle");
+  if (totalMatched <= ROW_LIMIT) {
+    toggle.innerHTML = "";
+  } else if (!expShowAll) {
+    toggle.innerHTML = `<button class="row-toggle">Showing first ${ROW_LIMIT} of ${totalMatched} — show all ▾</button>`;
+  } else {
+    toggle.innerHTML = `<button class="row-toggle">Showing all ${totalMatched} — collapse to first ${ROW_LIMIT} ▴</button>`;
+  }
+  const btn = toggle.querySelector("button");
+  if (btn) btn.addEventListener("click", () => {
+    expShowAll = !expShowAll;
+    drawExposures(allData);
+  });
 
   // Sort handlers go on the label span, not the whole th, so clicks on the
   // filter dropdown beneath don't accidentally toggle sort.
