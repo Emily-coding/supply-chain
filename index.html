@@ -64,6 +64,10 @@ tr:hover td{background:#1e2435}
 tr.pinned td{background:#1a2240}
 td.num{text-align:right;font-variant-numeric:tabular-nums;font-family:ui-monospace,monospace;font-size:11px}
 td.name-cell{max-width:280px;white-space:normal;line-height:1.3}
+.gva-col{background:rgba(94,160,255,0.05);border-left:1px solid rgba(94,160,255,0.18)}
+th.gva-col{background:#162133}
+.imp-col{background:rgba(245,166,35,0.05);border-left:1px solid rgba(245,166,35,0.20)}
+th.imp-col{background:#26200f}
 
 /* ── badges ── */
 .badge{display:inline-block;padding:1px 7px;border-radius:999px;font-size:10px;font-weight:700}
@@ -71,6 +75,8 @@ td.name-cell{max-width:280px;white-space:normal;line-height:1.3}
 .b-m{background:rgba(245,166,35,.15);color:#ffc266;border:1px solid rgba(245,166,35,.35)}
 .b-p{background:rgba(46,204,113,.15);color:#6fe3a2;border:1px solid rgba(46,204,113,.35)}
 .b-i{background:rgba(122,111,255,.15);color:#a59aff;border:1px solid rgba(122,111,255,.35)}
+.b-etii{background:rgba(94,160,255,.18);color:#a3c5ff;border:1px solid rgba(94,160,255,.45)}
+.b-etii-p{background:rgba(94,160,255,.08);color:#7d99c8;border:1px solid rgba(94,160,255,.25);font-style:italic}
 .heat{display:inline-block;padding:1px 7px;border-radius:3px;font-size:11px;
       font-family:ui-monospace,monospace;font-weight:600}
 
@@ -138,9 +144,84 @@ details[open] summary{margin-bottom:10px}
   </div>
 </section>
 
-<!-- ── table ── -->
+<!-- ── exposures table — direct + indirect energy by SIC with road/air channel decomp ── -->
+<section id="exposures">
+  <h2>Supply-chain energy exposures by SIC — direct + indirect</h2>
+  <p style="color:var(--muted);font-size:12px;margin-bottom:10px;max-width:960px">
+  Per £1 of industry output, from the 2023 ONS A and Leontief inverse L matrices.
+  Energy-share columns use a <strong>corrected energy-intensity vector</strong> at every
+  domestic node — e<sub>fuel</sub>[i] = A<sub>dom</sub>[fuel,i] + A<sub>imp</sub>[fuel,i] —
+  so direct cost shares now include imported jet kerosene, marine bunker and diesel that
+  industries buy without going through a UK energy industry. The Leontief inverse itself
+  remains strictly domestic, L<sub>dom</sub> = (I − A<sub>dom</sub>)⁻¹ — i.e. supply-chain
+  propagation passes through UK industries only. Default view shows the three fuel
+  <strong>totals</strong> (direct + indirect via UK supply chain). Click
+  <em>Show direct/indirect breakdown</em> to split each total into its direct
+  (e<sub>fuel</sub>[j], UK + imp) and UK-domestic-indirect parts. The blue-tinted column rebases <strong>direct</strong>
+  gas+electricity to share of <strong>GVA</strong> — this is the DESNZ ETII formula
+  (80th-percentile cutoff ≈ 8.3% in this dataset defines ETII eligibility). We don't
+  show "Total/GVA" because Leontief total embodies energy across the whole supply
+  chain (output-scaled numerator) over a much smaller value-added denominator —
+  it produces &gt;100% values that aren't economically interpretable as "energy share
+  of value added". <strong>Imp%</strong> is the share of
+  j's intermediate input spending that is imported — a flag for how much of the upstream
+  supply chain is unmeasured (foreign embodied energy in imported non-energy intermediates).
+  <strong>ρ</strong> is calibrated pass-through; the badge is the implied adjustment margin.
+  </p>
+
+  <div class="ctrl-bar" style="margin-bottom:8px">
+    <div class="ctrl-group" id="exp-mode-grp">
+      <button class="active" data-exp-mode="summary">Fuel totals</button>
+      <button data-exp-mode="breakdown">Show direct/indirect breakdown</button>
+    </div>
+  </div>
+
+  <div class="tbl-wrap">
+    <table id="exp-tbl">
+      <thead id="exp-thead"></thead>
+      <tbody id="exp-tbody"></tbody>
+    </table>
+  </div>
+  <!-- Literature panel -->
+  <div class="note" style="margin-top:10px">
+  <strong>Literature estimates of price / quantity adjustment.</strong>
+  <strong>Pass-through.</strong> Ganapati, Shapiro &amp; Walker (AEJ Applied 2020), US manufacturing micro-data: ~70% of energy-cost changes pass into output prices on average, &gt;100% in concentrated sectors, &lt;70% in trade-exposed commodity segments.
+  Lafrogne-Joussier, Martin &amp; Méjean (CEPII 2023), French firm-level: ~100% pass-through of energy costs when firms reset prices, ~115% in least-competitive sectors (excess pass-through under market power).
+  Bank of England / Bank Underground (2023): UK aggregate pass-through is gradual, incomplete, and asymmetric.
+  <br><br>
+  <strong>Energy demand price elasticity (quantity margin).</strong> Marin &amp; Vona (Eur. Econ. Rev. 2021), French manufacturing firms: price elasticity ≈ −0.4 (electricity), −0.9 (gas); shrinks to −0.2 / −0.7 in the 2022 large-shock regime.
+  Labandeira, Labeaga &amp; López-Otero (Energy Policy 2017), meta-analysis of 428 studies: short-run ≈ −0.21, long-run ≈ −0.61.
+  Adeyemi-Hunt-style OECD industrial electricity panels: short-run ≈ −0.11 to −0.24, long-run ≈ −0.11 to −0.28; output elasticity ≈ 0.5.
+  Adjustment-channel ranking (Lafrogne-Joussier et al.): cut energy input → raise prices → substitute toward imported intermediates → shift production across plants → invest in efficiency.
+  </div>
+
+  <!-- Upstream-undercount callout — industries where the residual MRIO gap matters most -->
+  <div class="note" style="border-color:rgba(245,166,35,0.5)">
+  <strong style="color:#ffc266">Upstream-supply-chain undercount — where the residual MRIO gap matters.</strong>
+  The corrected energy-intensity vector adds direct imports of energy products (jet kerosene, marine bunker, diesel,
+  imported gas, electricity interconnector) to each industry's direct cost share, and propagates that correction
+  through the UK domestic Leontief — so imported jet fuel at H51 flows correctly into industries that buy air
+  transport. What it still does <em>not</em> capture is foreign embodied energy in imported <em>non-energy</em>
+  intermediates (e.g. Chinese steel bought by UK fabricators, German chemicals bought by UK plastics, imported
+  semiconductors bought by UK electronics manufacturers). Closing that gap requires a multi-region input-output
+  table (OECD-ICIO, Eora) — out of scope here. The <strong>Imp%</strong> column flags the share of each industry's
+  intermediate input spending that is imported, which is a proxy for the size of the residual undercount.
+  Industries where Imp% &gt; 35% are the ones whose <em>true</em> total energy footprint is most likely to be
+  materially higher than the table reports — Hardt et al. (2018) put the average UK industrial MRIO uplift at
+  20–30% across all goods-producing sectors, with concentration in the high-import-intensity tail.
+  Top of the watch list: <strong>Aircraft repair (C3316) ~71%</strong>, <strong>Other chemicals (C205) ~59%</strong>,
+  <strong>Rubber & plastics (C22) ~53%</strong>, <strong>Petrochemicals (C20B) ~52%</strong>,
+  <strong>Aluminium & other basic metals (C244_5) ~51%</strong>, <strong>Edible oils (C104) ~50%</strong>,
+  <strong>Wood products (C16) ~48%</strong>, <strong>Industrial gases / fertilisers (C20A) ~46%</strong>,
+  <strong>Air transport (H51) ~46%</strong>, <strong>Dyestuffs & agrochemicals (C20C) ~44%</strong>,
+  <strong>Paints (C203) ~44%</strong>, <strong>Iron & steel (C241T243) ~42%</strong>,
+  <strong>Motor vehicles (C29) ~42%</strong>, <strong>Electronics (C26) ~36%</strong>.
+  </div>
+</section>
+
+<!-- ── IRF table ── -->
 <section>
-  <h2>All industries — sortable by any column</h2>
+  <h2>Industry IRF — producer price response by quarter (sortable)</h2>
   <div class="tbl-wrap">
     <table id="tbl">
       <thead>
@@ -257,7 +338,48 @@ let pt    = "full";  // full | realistic
 let qsel  = 4;
 let searchTerm = "";
 let sortKey = "irf_q4", sortDir = -1;
+// Independent sort for the exposures table — the question it answers is
+// different (cost share rather than IRF dynamics) so the sort persists separately.
+let expSortKey = "total_share", expSortDir = -1;
+let expMode = "summary";  // summary | breakdown
 let pinned = new Set();
+
+// Column definitions for each exposures-table mode. Single source of truth so
+// that the header and the row renderer can never drift apart.
+//   key   → field on the row
+//   label → header text (HTML allowed)
+//   title → hover tooltip
+//   cls   → extra td/th class (gva-col adds blue tint)
+//   fmt   → 'pct' | 'rho' | 'margin' | 'code' | 'name' | 'heat'
+const EXP_COLS = {
+  summary: [
+    {key:"code",                label:"Code",                                       fmt:"code"},
+    {key:"name",                label:"Industry",                                   fmt:"name"},
+    {key:"total_gas",           label:"Gas",       title:"Total gas per £1 output: direct (UK + imp) + UK-domestic indirect",        fmt:"pct"},
+    {key:"total_elec",          label:"Elec",      title:"Total electricity per £1 output: direct (UK + imp) + UK-domestic indirect", fmt:"pct"},
+    {key:"total_oil",           label:"Oil",       title:"Total refined petroleum per £1 output: direct (UK + imp, incl. imported jet/bunker/diesel) + UK-domestic indirect", fmt:"pct"},
+    {key:"total_share",         label:"Total<br>energy", title:"Direct (UK + imp) + UK-domestic indirect, all fuels — does NOT include foreign embodied energy in imported non-energy intermediates (see Imp%)", fmt:"heat"},
+    {key:"gas_elec_direct_gva", label:"Gas+Elec /<br>GVA",   title:"Direct (UK + imp) gas + electricity / GVA — DESNZ ETII metric (80th-percentile cutoff ≈ 8.3% in this dataset)", cls:"gva-col", fmt:"heatGVA"},
+    {key:"import_intensity",    label:"Imp%",      title:"Imports as share of j's intermediate input spending — flag for unmeasured upstream supply chain (foreign embodied energy in imported non-energy intermediates)", cls:"imp-col", fmt:"pct"},
+    {key:"etii",                label:"DESNZ<br>ETII",  title:"DESNZ ETII status (Jan 2023 list, mapped from 4-digit SIC to IOAT bucket): ETII = whole bucket on list; Partial = some sub-codes on list; — = none on list", fmt:"etii"},
+    {key:"margin",              label:"Adjustment margin",  title:"Likely adjustment margin under an energy-cost shock, derived from a sector-specific pass-through coefficient ρ calibrated to Ganapati/Shapiro/Walker (AEJ Applied 2020) and Lafrogne-Joussier/Martin/Méjean (CEPII 2023). ρ ≤ 0.55 → Quantity-led (firms cut output / lose share rather than raise prices); 0.55 < ρ < 0.85 → Mixed; ρ ≥ 0.85 → Price-led (concentrated / domestic-oriented sectors with full or excess pass-through).", fmt:"margin"},
+  ],
+  breakdown: [
+    {key:"code",                label:"Code",                                       fmt:"code"},
+    {key:"name",                label:"Industry",                                   fmt:"name"},
+    {key:"direct_gas",          label:"Gas D<br>(UK+imp)",   title:"Direct gas per £1 output, including imports — e_gas[j] = A_dom[gas,j] + A_imp[gas,j]", fmt:"pct"},
+    {key:"indirect_gas",        label:"Gas I<br>(UK chain)", title:"Indirect gas per £1 output via UK-domestic supply chain (L − direct)",                fmt:"pct"},
+    {key:"direct_elec",         label:"Elec D<br>(UK+imp)",  title:"Direct electricity per £1 output, including imports",                                 fmt:"pct"},
+    {key:"indirect_elec",       label:"Elec I<br>(UK chain)",title:"Indirect electricity via UK-domestic supply chain",                                   fmt:"pct"},
+    {key:"direct_oil",          label:"Oil D<br>(UK+imp)",   title:"Direct refined-petroleum bought, including imported jet kerosene / marine bunker / diesel",   fmt:"pct"},
+    {key:"indirect_oil",        label:"Oil I<br>(UK chain)", title:"Indirect oil per £1 output via UK-domestic supply chain — refined petroleum embodied in all intermediates the industry buys (transport, chemicals, plastics, basic metals etc.)", fmt:"pct"},
+    {key:"total_share",         label:"Total<br>energy", title:"Direct + indirect, all fuels — does NOT include foreign embodied energy in imported non-energy intermediates (see Imp%)", fmt:"heat"},
+    {key:"gas_elec_direct_gva", label:"Gas+Elec /<br>GVA",   title:"Direct (UK + imp) gas + electricity / GVA — DESNZ ETII metric (80th-percentile cutoff ≈ 8.3% in this dataset)", cls:"gva-col", fmt:"heatGVA"},
+    {key:"import_intensity",    label:"Imp%",      title:"Imports as share of j's intermediate input spending — flag for unmeasured upstream supply chain", cls:"imp-col", fmt:"pct"},
+    {key:"etii",                label:"DESNZ<br>ETII",  title:"DESNZ ETII status (Jan 2023 list, mapped from 4-digit SIC to IOAT bucket)", fmt:"etii"},
+    {key:"margin",              label:"Adjustment margin",  title:"Likely adjustment margin derived from sector-specific pass-through ρ (Ganapati 2020, LMM 2023). Quantity-led ρ ≤ 0.55, Mixed 0.55–0.85, Price-led ≥ 0.85.", fmt:"margin"},
+  ],
+};
 
 function scenKey(){ return `${scen}_${pt}`; }
 function irfQ(row, q){ return row[`${scenKey()}_irf`]?.[q] ?? null; }
@@ -430,6 +552,78 @@ function drawTable(data){
 }
 
 /* ──────────────────────────────────────────────────────────
+   Exposures table — direct + indirect energy by SIC, oil split
+   into via-road / via-air / other indirect channels. Independent
+   of the scenario controls (this is structural cost share, not IRF).
+────────────────────────────────────────────────────────── */
+function renderExpCell(r, col){
+  const cls = col.cls ? ` ${col.cls}` : "";
+  switch(col.fmt){
+    case "code":   return `<td class="${col.cls||""}"><code style="font-size:11px">${r.code}</code></td>`;
+    case "name":   return `<td class="name-cell${cls}">${r.name}</td>`;
+    case "rho":    return `<td class="num${cls}">${r.rho.toFixed(2)}</td>`;
+    case "margin": {
+      const band = (r.margin_c === "q") ? "ρ ≤ 0.55"
+                 : (r.margin_c === "m") ? "0.55 < ρ < 0.85"
+                 : "ρ ≥ 0.85";
+      const tip = `${MARGIN_LABEL[r.margin_c]} — assigned ρ = ${r.rho.toFixed(2)} (band: ${band}). Calibrated from Ganapati/Shapiro/Walker (AEJ Applied 2020) and Lafrogne-Joussier/Martin/Méjean (CEPII 2023): ~70% pass-through avg US mfg, &lt;70% in trade-exposed commodity, ≥100% in concentrated/domestic sectors.`;
+      return `<td class="${col.cls||""}"><span class="badge ${MARGIN_CLASS[r.margin_c]}" title="${tip.replace(/"/g,'&quot;')}">${MARGIN_LABEL[r.margin_c]}</span></td>`;
+    }
+    case "etii": {
+      const status = r.etii;
+      if (status === "etii")    return `<td class="${col.cls||""}"><span class="badge b-etii">ETII</span></td>`;
+      if (status === "partial") return `<td class="${col.cls||""}"><span class="badge b-etii-p">Partial</span></td>`;
+      return `<td class="${col.cls||""}" style="color:#556">—</td>`;
+    }
+    case "heat":   return `<td class="num${cls}"><span class="heat" style="${heatColor(r[col.key])}">${pct(r[col.key])}</span></td>`;
+    case "heatGVA":{
+      // GVA shares are typically 3–5× larger than output shares, so rescale
+      // before passing to heatColor so the colour ramp doesn't saturate.
+      const v = r[col.key];
+      return `<td class="num${cls}"><span class="heat" style="${heatColor(v != null ? v/4 : null)}">${pct(v)}</span></td>`;
+    }
+    case "pct":
+    default:       return `<td class="num${cls}">${pct(r[col.key])}</td>`;
+  }
+}
+
+function drawExposures(data){
+  const cols = EXP_COLS[expMode];
+
+  // Header — rebuilt each render so it tracks the active mode.
+  const thead = document.getElementById("exp-thead");
+  thead.innerHTML = "<tr>" + cols.map(c => {
+    const cls = c.cls ? ` class="${c.cls}"` : "";
+    const tip = c.title ? ` title="${c.title.replace(/"/g,'&quot;')}"` : "";
+    return `<th data-k="${c.key}"${cls}${tip}>${c.label}<span class="arr">▾</span></th>`;
+  }).join("") + "</tr>";
+
+  // Sort the active key. 'margin' is presented as a category badge but ranks
+  // monotonically with ρ, so we route its sort through ρ.
+  const sortVal = (r, k) => (k === "margin" ? (r.rho ?? -Infinity) : (r[k] ?? -Infinity));
+
+  const term = searchTerm.toLowerCase();
+  const rows = data.map(r => ({...r, margin_c: margin(r.rho)}))
+                   .filter(r => !term || (r.code+" "+r.name).toLowerCase().includes(term));
+  rows.sort((a,b)=>{
+    const va = sortVal(a, expSortKey), vb = sortVal(b, expSortKey);
+    if(typeof va === "string") return expSortDir*(va<vb?-1:va>vb?1:0);
+    return expSortDir*(va-vb);
+  });
+
+  document.getElementById("exp-tbody").innerHTML = rows.map(r =>
+    `<tr data-code="${r.code}">${cols.map(c => renderExpCell(r, c)).join("")}</tr>`
+  ).join("");
+
+  // Re-bind sort handlers because thead was rebuilt.
+  thead.querySelectorAll("th[data-k]").forEach(th => th.addEventListener("click", () => {
+    const k = th.dataset.k;
+    if (expSortKey === k) expSortDir *= -1; else { expSortKey = k; expSortDir = -1; }
+    render();
+  }));
+}
+
+/* ──────────────────────────────────────────────────────────
    Main render
 ────────────────────────────────────────────────────────── */
 function render(){
@@ -437,6 +631,7 @@ function render(){
   drawLine(enriched);
   drawBar(enriched);
   drawTable(allData);
+  drawExposures(allData);
 }
 
 /* ──────────────────────────────────────────────────────────
@@ -463,6 +658,12 @@ document.getElementById("search").addEventListener("input",e=>{
 document.querySelectorAll("#tbl thead th[data-k]").forEach(th=>th.addEventListener("click",()=>{
   const k=th.dataset.k;
   if(sortKey===k) sortDir*=-1; else{sortKey=k;sortDir=-1;}
+  render();
+}));
+document.querySelectorAll("#exp-mode-grp button").forEach(b=>b.addEventListener("click",()=>{
+  document.querySelectorAll("#exp-mode-grp button").forEach(x=>x.classList.remove("active"));
+  b.classList.add("active");
+  expMode = b.dataset.expMode;
   render();
 }));
 

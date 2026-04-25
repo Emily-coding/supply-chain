@@ -1,25 +1,40 @@
 """
-UK Supply-Chain Leontief Price Impulse Response
+UK Supply-Chain Leontief energy exposures + price IRF.
 
-Loads the ONS 2023 Input-Output Analytical Tables (industry-by-industry) from
-`data/iot2023industry.xlsx`, partitions energy industries (C19 refined
-petroleum, D351 electricity, D352_3 gas) as exogenous, and computes how a
-shock to their output prices propagates to the producer price of every other
-UK industry at SIC 2-digit granularity.
+Reads the 2023 ONS Input-Output Analytical Tables (industry-by-industry) from
+`data/iot2023industry.xlsx` and, for each non-energy industry, emits two
+distinct things:
 
-Two scenarios:
-  - UNIT: +10% shock to every energy product (scales linearly).
-  - 2022: calibrated to 2021 Q1 -> 2022 Q3 wholesale moves — refined petroleum
-    +50%, electricity +200%, gas +250%.
+1. Structural energy exposures per £1 of output, using a corrected
+   energy-intensity vector at each domestic node:
+       e_fuel[i] = A_dom[fuel, i] + A_imp[fuel, i]   (UK + imports)
+   for fuel ∈ {gas, electricity, refined petroleum}, where A_imp comes
+   from the ONS 'Imports use pxi' table. The Leontief inverse remains
+   strictly domestic, L_dom = (I − A_dom)⁻¹. Reported per industry j:
+   - Direct  = e_fuel[j]                         (UK + imp energy bought directly)
+   - Total   = e_fuel · L_dom[:, j]              (embedded via UK supply chains)
+   - Indirect = Total − Direct
+   - Indirect oil split by last-hop attribution:
+       oil_via_transport          = Σ_{T ∈ transport} e_oil[T] · L_dom[T, j]
+       oil_indirect_non_transport = Indirect_oil − oil_via_transport
+     where "transport" = every IOAT 'H' bucket (rail, land transport,
+     water, air, warehousing, post/courier).
+   This captures imported jet/bunker/diesel both directly (for industries
+   that buy them) and via the transport channel (for industries that buy
+   transport services). It does NOT capture foreign embodied energy in
+   imported NON-energy intermediates (e.g. Chinese steel, German chemicals).
+   The per-industry import_intensity field flags where that residual gap
+   is most likely to matter.
 
-Two pass-through regimes:
-  - FULL: p = A' p + v solved exactly; upper-bound Leontief limit.
-  - REALISTIC: sector-specific rho_j applied at each propagation round, drawn
-    from Ganapati/Shapiro/Walker (AEJ Applied 2020), Lafrogne-Joussier/Martin/
-    Mejean (CEPII 2023), and qualitative trade/market-power judgements.
+2. A price-side impulse response: treat C19, D351, D352_3 as exogenous
+   price-setters and propagate shocks through the rest of the economy.
+   Two scenarios — UNIT (+10% on every energy product) and 2022 (refined +50%,
+   elec +200%, gas +250%). Two pass-through regimes — FULL (ρ=1) and
+   REALISTIC (sector-specific ρ_j, calibrated to Ganapati/Shapiro/Walker
+   2020 and Lafrogne-Joussier/Martin/Méjean 2023). Dynamic path built by
+   Neumann series; one expansion round = one quarter.
 
-Dynamic IRF built by Neumann series: one expansion round = one quarter.
-Output: data/irf.json consumed by index.html.
+Output: data/irf.json, consumed by index.html and summary.html.
 """
 import json
 from pathlib import Path
@@ -28,14 +43,117 @@ import openpyxl
 
 ROOT = Path(__file__).parent
 XLSX = ROOT / "data" / "iot2023industry.xlsx"
+XLSX_PRODUCT = ROOT / "data" / "iot2023product.xlsx"
 OUT  = ROOT / "data" / "irf.json"
 
 ENERGY_CODES = ["C19", "D351", "D352_3"]
+# All UK transport / logistics industries — every IOAT 'H' bucket. Oil
+# bought by these industries is the various fuels used to move goods and
+# people (diesel for road haulage, jet kerosene for air, marine bunker for
+# water, electricity-displacing diesel for rail traction, last-mile diesel
+# for post/courier). For a downstream industry j, the indirect oil that
+# arrives via "any transport last-hop" is summed across this set.
+TRANSPORT_CODES = ["H491_2", "H493T495", "H50", "H51", "H52", "H53"]
 HORIZON_QUARTERS = 12
 
 # 2022-calibrated wholesale price shocks (decimal, not pp).
 SHOCK_2022 = {"C19": 0.50, "D351": 2.00, "D352_3": 2.50}
 SHOCK_UNIT = {"C19": 0.10, "D351": 0.10, "D352_3": 0.10}
+
+# -----------------------------------------------------------------------------
+# Load GVA + total output per industry from the IOT sheet of the same workbook.
+# Used to convert energy cost shares from a share-of-output denominator (the
+# A-matrix native unit) to a share-of-GVA denominator (the ETII / DESNZ
+# convention, and how most of the cost-pass-through literature reports
+# energy intensity).
+# Layout: IOT sheet, columns 3..N are industries (codes at r4), GVA at r118,
+# total output at basic prices at r119.
+# -----------------------------------------------------------------------------
+def load_gva_and_output():
+    wb = openpyxl.load_workbook(XLSX, data_only=True, read_only=True)
+    ws = wb["IOT"]
+    out = {}
+    for c in range(3, ws.max_column + 1):
+        code = ws.cell(4, c).value
+        if code is None:
+            break
+        code = str(code).strip()
+        gva = ws.cell(118, c).value
+        output = ws.cell(119, c).value
+        out[code] = {
+            "gva_gbpm":    float(gva)    if isinstance(gva,    (int, float)) else 0.0,
+            "output_gbpm": float(output) if isinstance(output, (int, float)) else 0.0,
+        }
+    wb.close()
+    return out
+
+
+# -----------------------------------------------------------------------------
+# Load energy-product imports per industry from the product workbook's
+# 'Imports use pxi' table, plus the aggregate import intensity (imports as
+# share of total intermediate input spending) per industry from the IOT
+# sheet's totals rows.
+#
+# The first three values become the A_imp[energy, j] entries that we add
+# to the corrected energy-intensity vector at each domestic node (see
+# build()). The aggregate import intensity is a flag for which industries
+# have the largest unmeasured upstream supply chain — i.e. where embodied
+# energy in imported NON-energy intermediates (steel, chemicals, etc.) is
+# most likely to be material and is NOT picked up by the domestic Leontief.
+# -----------------------------------------------------------------------------
+ENERGY_IMPORT_CPAS = {
+    "CPA_C19":     "imp_oil_gbpm",
+    "CPA_D351":    "imp_elec_gbpm",
+    "CPA_D352_3":  "imp_gas_gbpm",
+}
+
+def load_imports_and_intermediates():
+    out = {}
+
+    # 1. Per-industry energy-product imports from product workbook
+    wb_p = openpyxl.load_workbook(XLSX_PRODUCT, data_only=True, read_only=True)
+    ws = wb_p["Imports use pxi"]
+    col_codes = {}
+    for c in range(3, ws.max_column + 1):
+        code = ws.cell(4, c).value
+        if code is None:
+            break
+        col_codes[c] = str(code).strip()
+    energy_rows = {}
+    for r in range(7, ws.max_row + 1):
+        v = ws.cell(r, 1).value
+        if v in ENERGY_IMPORT_CPAS:
+            energy_rows[v] = r
+    missing = set(ENERGY_IMPORT_CPAS) - set(energy_rows)
+    assert not missing, f"missing energy CPAs in Imports use pxi: {missing}"
+
+    for c, code in col_codes.items():
+        rec = {"imp_oil_gbpm": 0.0, "imp_gas_gbpm": 0.0, "imp_elec_gbpm": 0.0}
+        for cpa, key in ENERGY_IMPORT_CPAS.items():
+            v = ws.cell(energy_rows[cpa], c).value
+            rec[key] = float(v) if isinstance(v, (int, float)) else 0.0
+        out[code] = rec
+    wb_p.close()
+
+    # 2. Aggregate domestic intermediate use + total imports from the
+    #    industry workbook (rows 111 and 112 of the IOT sheet).
+    wb_i = openpyxl.load_workbook(XLSX, data_only=True, read_only=True)
+    ws = wb_i["IOT"]
+    for c in range(3, ws.max_column + 1):
+        code = ws.cell(4, c).value
+        if code is None:
+            break
+        code = str(code).strip()
+        rec = out.setdefault(code, {"imp_oil_gbpm": 0.0, "imp_gas_gbpm": 0.0, "imp_elec_gbpm": 0.0})
+        dom = ws.cell(111, c).value
+        imp = ws.cell(112, c).value
+        rec["dom_intermediate_gbpm"] = float(dom) if isinstance(dom, (int, float)) else 0.0
+        rec["imp_total_gbpm"]        = float(imp) if isinstance(imp, (int, float)) else 0.0
+        denom = rec["dom_intermediate_gbpm"] + rec["imp_total_gbpm"]
+        rec["import_intensity"] = (rec["imp_total_gbpm"] / denom) if denom else 0.0
+    wb_i.close()
+    return out
+
 
 # -----------------------------------------------------------------------------
 # Load A matrix from ONS xlsx
@@ -87,6 +205,160 @@ def load_A():
 #               basic chemicals, paper, glass, ceramics) — Ganapati et al.
 #               (2020) avg ~70%, tradeable commodity tail below that
 # -----------------------------------------------------------------------------
+# -----------------------------------------------------------------------------
+# Shorthand industry names. ONS publishes long, formal SIC titles which are
+# unwieldy in tables (e.g. "Manufacture of glass, refractory, clay, porcelain,
+# ceramic, stone products - 23.1-4/7-9"). The shorthand below is what gets
+# emitted to irf.json and rendered in the table; the original ONS title is
+# preserved alongside as `name_full` for reference.
+# -----------------------------------------------------------------------------
+NAME_OVERRIDES = {
+    "A01":              "Agriculture",
+    "A02":              "Forestry",
+    "A03":              "Fishing & aquaculture",
+    "B05":              "Coal mining",
+    "B06 & B07":        "Oil/gas extraction & metal ores",
+    "B08":              "Other mining",
+    "B09":              "Mining support services",
+    "C101":             "Meat processing",
+    "C102_3":           "Fish & fruit/veg processing",
+    "C104":             "Edible oils & fats",
+    "C105":             "Dairy",
+    "C106":             "Grain milling & starches",
+    "C107":             "Bakery",
+    "C108":             "Other food mfg",
+    "C109":             "Animal feeds",
+    "C1101T1106 & C12": "Alcohol & tobacco",
+    "C1107":            "Soft drinks",
+    "C13":              "Textiles",
+    "C14":              "Apparel",
+    "C15":              "Leather",
+    "C16":              "Wood & wood products",
+    "C17":              "Paper & paper products",
+    "C18":              "Printing",
+    "C19":              "Refined petroleum",
+    "C203":             "Paints & coatings",
+    "C204":             "Soaps & detergents",
+    "C205":             "Other chemicals",
+    "C20A":             "Industrial gases / fertilisers",
+    "C20B":             "Petrochemicals",
+    "C20C":             "Dyestuffs & agrochemicals",
+    "C21":              "Pharmaceuticals",
+    "C22":              "Rubber & plastics",
+    "C235_6":           "Cement, lime & concrete",
+    "C23OTHER":         "Glass & ceramics",
+    "C241T243":         "Iron & steel",
+    "C244_5":           "Aluminium & other basic metals",
+    "C25":              "Fabricated metal",
+    "C26":              "Electronics & optical",
+    "C27":              "Electrical equipment",
+    "C28":              "Machinery",
+    "C29":              "Motor vehicles",
+    "C301":             "Shipbuilding",
+    "C303":             "Aerospace mfg",
+    "C30OTHER":         "Other transport equipment",
+    "C31":              "Furniture",
+    "C32":              "Other manufacturing",
+    "C3315":            "Ship repair",
+    "C3316":            "Aircraft repair",
+    "C33OTHER":         "Other repair & install",
+    "D351":             "Electricity",
+    "D352_3":           "Gas & steam",
+    "E36":              "Water supply",
+    "E37":              "Sewerage",
+    "E38":              "Waste management",
+    "E39":              "Remediation",
+    "F41, F42  & F43":  "Construction",
+    "G45":              "Vehicle wholesale & retail",
+    "G46":              "Wholesale (non-motor)",
+    "G47":              "Retail (non-motor)",
+    "H491_2":           "Rail transport",
+    "H493T495":         "Land transport (road + pipelines)",
+    "H50":              "Water transport",
+    "H51":              "Air transport",
+    "H52":              "Warehousing",
+    "H53":              "Postal & courier",
+    "I55":              "Accommodation",
+    "I56":              "Restaurants & food service",
+    "J58":              "Publishing",
+    "J59 & J60":        "TV, film & sound",
+    "J61":              "Telecoms",
+    "J62":              "IT services",
+    "J63":              "Information services",
+    "K64":              "Banking",
+    "K65.1-2 & K65.3":  "Insurance & pensions",
+    "K66":              "Financial auxiliary",
+    "L683":             "Real estate (fee-based)",
+    "L68A":             "Owner-occupier housing",
+    "L68BXL683":        "Real estate (own/lease)",
+    "M691":             "Legal",
+    "M692":             "Accounting & audit",
+    "M70":              "Management consultancy",
+    "M71":              "Architecture & engineering",
+    "M72":              "R&D",
+    "M73":              "Advertising",
+    "M74":              "Other professional services",
+    "M75":              "Veterinary",
+    "N77":              "Rental & leasing",
+    "N78":              "Employment services",
+    "N79":              "Travel agencies",
+    "N80":              "Security services",
+    "N81":              "Building services",
+    "N82":              "Office support",
+    "O84":              "Public admin & defence",
+    "P85":              "Education",
+    "Q86":              "Human health",
+    "Q87 & Q88":        "Social care",
+    "R90":              "Arts & entertainment",
+    "R91":              "Libraries & museums",
+    "R92":              "Gambling",
+    "R93":              "Sports & recreation",
+    "S94":              "Membership organisations",
+    "S95":              "Personal-goods repair",
+    "S96":              "Personal services",
+    "T97":              "Households as employers",
+}
+def short_name(code: str, fallback: str) -> str:
+    return NAME_OVERRIDES.get(code, fallback.strip())
+
+
+# -----------------------------------------------------------------------------
+# DESNZ Energy & Trade Intensive Industries (ETII) eligibility, mapped from
+# the published 4-digit SIC list (DESNZ Jan 2023 ETII methodology PDF, Annex A)
+# onto the IOAT 2023 industry buckets used in this dataset. Three tiers:
+#
+#   "etii"    — the IOAT bucket is wholly or predominantly on the ETII list
+#   "partial" — some sub-codes inside the bucket are ETII, others are not
+#   None      — none of the bucket is ETII
+#
+# Where the IOAT bucket aggregates multiple 4-digit codes the precision is
+# inevitably partial; the table tooltip flags this. A 4-digit-precise
+# version would require working at the SIC class level using ABS/ECUK data.
+# -----------------------------------------------------------------------------
+ETII_STATUS = {
+    # Full ETII buckets
+    "C17":      "etii",   # 17.11/12/21-29  pulp & paper
+    "C20A":     "etii",   # 20.11/13/15     industrial gases / inorganics / fertilisers
+    "C20B":     "etii",   # 20.14/16/17/60  organic chemicals / plastics primary / synthetic rubber / man-made fibres
+    "C20C":     "etii",   # 20.12/20        dyestuffs / agrochemicals
+    "C235_6":   "etii",   # 23.51/52 + 61-69  cement, lime, concrete
+    "C23OTHER": "etii",   # 23.11-20/31-49/99  glass, refractories, ceramics, abrasives
+    "C241T243": "etii",   # 24.10/20/31-34  iron & steel
+    "C244_5":   "etii",   # 24.41-46/51-54  aluminium + other basic metals + casting
+    # Partial ETII buckets (some sub-codes on the list, others not)
+    "B06 & B07": "partial",  # 07.x metal ores ETII; 06.x oil/gas extraction not
+    "B08":       "partial",  # 08.91/93/99 ETII; 08.11/12/etc not
+    "C104":      "partial",  # 10.41 oils & fats ETII; 10.42 not
+    "C106":      "partial",  # 10.62 starches ETII; 10.61 grain milling not
+    "C108":      "partial",  # 10.81 sugar ETII; rest of bucket not
+    "C1101T1106 & C12": "partial",  # 11.06 malt ETII; rest of bucket not
+    "C13":       "partial",  # 13.10/20/30/94/95/96 ETII; 13.91/92/93/99 not
+    "C16":       "partial",  # 16.10 sawmilling, 16.21 veneer ETII; 16.22-29 not
+    "C205":      "partial",  # 20.59 partly ETII; 20.51-53 not
+    "C22":       "partial",  # 22.11/19/21/22 ETII; 22.23/29 not
+}
+
+
 RHO_OVERRIDES = {
     # Heavily trade-exposed EII commodity manufacturing
     "C241T243": 0.35,   # Basic iron & steel
@@ -128,6 +400,27 @@ def build():
     A, codes, names = load_A()
     n = len(codes)
     idx = {c: i for i, c in enumerate(codes)}
+    gva_out = load_gva_and_output()
+    imports = load_imports_and_intermediates()
+
+    # Corrected energy-intensity vectors per £ of each industry's output:
+    # e_<fuel>[i] = A_dom[fuel, i] + A_imp[fuel, i]. Built once here so the
+    # direct, total, indirect and via_transport calculations in the per-row
+    # loop below all share the same numerator at each node. Imported
+    # non-energy intermediates are NOT added — they would require a
+    # multi-region IO model to propagate properly.
+    e_gas  = np.zeros(n)
+    e_elec = np.zeros(n)
+    e_oil  = np.zeros(n)
+    for i, code in enumerate(codes):
+        meta_imp = imports.get(code, {})
+        out_gbpm = gva_out.get(code, {}).get("output_gbpm", 0.0)
+        a_imp_gas  = (meta_imp.get("imp_gas_gbpm",  0.0) / out_gbpm) if out_gbpm else 0.0
+        a_imp_elec = (meta_imp.get("imp_elec_gbpm", 0.0) / out_gbpm) if out_gbpm else 0.0
+        a_imp_oil  = (meta_imp.get("imp_oil_gbpm",  0.0) / out_gbpm) if out_gbpm else 0.0
+        e_gas[i]  = float(A[idx["D352_3"], i]) + a_imp_gas
+        e_elec[i] = float(A[idx["D351"],   i]) + a_imp_elec
+        e_oil[i]  = float(A[idx["C19"],    i]) + a_imp_oil
 
     e_idx = [idx[c] for c in ENERGY_CODES if c in idx]
     r_idx = [i for i in range(n) if i not in e_idx]
@@ -164,24 +457,132 @@ def build():
         lr = L_rr @ direct
         return direct, quarters, lr
 
+    # Full-economy Leontief inverse L = (I - A)^-1 (includes the energy
+    # rows, unlike L_rr above). Used to compute total (direct + indirect)
+    # energy intensity per £1 of an industry's output, and to decompose
+    # indirect oil exposure by transport channel.
+    L_full = np.linalg.inv(np.eye(n) - A)
+
+    transport_idx = [idx[c] for c in TRANSPORT_CODES if c in idx]
+
     out_rows = []
-    # Per-industry direct energy cost shares (per unit output, decimal)
+    # Per-industry energy cost shares using corrected (UK + imp) energy-
+    # intensity vectors at each domestic node, propagated through the
+    # domestic Leontief L_full = (I − A_dom)^-1. Direct = e_*[j] is the
+    # total energy bought by j (UK + imports). Total = e_* · L_full[:, j]
+    # is energy embedded along all UK supply chains, with each node's
+    # energy use measured correctly. Indirect = total − direct.
+    # NOTE: this still excludes embodied energy in imported NON-energy
+    # intermediates (foreign supply chains we don't have data for). Per-
+    # industry import_intensity flag below surfaces where that gap matters.
     for i in range(n):
         if i in e_idx:
             continue
         code = codes[i]
         name = names[i]
-        gas   = float(A[idx["D352_3"], i])
-        elec  = float(A[idx["D351"],   i])
-        oil   = float(A[idx["C19"],    i])
+
+        # Direct (UK + imported) energy bought by j per £ output
+        gas   = float(e_gas[i])
+        elec  = float(e_elec[i])
+        oil   = float(e_oil[i])
         direct_share = gas + elec + oil
+
+        # Total energy embedded via UK supply chains, with corrected
+        # energy intensity at each node: total[fuel, j] = e_fuel · L[:, j]
+        total_gas  = float(e_gas  @ L_full[:, i])
+        total_elec = float(e_elec @ L_full[:, i])
+        total_oil  = float(e_oil  @ L_full[:, i])
+
+        # Indirect = total − direct (the indirect part propagates through
+        # UK domestic chains; each upstream node's e_fuel includes its own
+        # imports of energy, so airline-bought kerosene shows up when any
+        # downstream industry buys air-transport services).
+        indirect_gas  = total_gas  - gas
+        indirect_elec = total_elec - elec
+        indirect_oil  = total_oil  - oil
+
+        # Indirect oil arriving with any transport industry as last hop.
+        # Uses e_oil at each transport node so imported jet kerosene /
+        # marine bunker / road diesel embedded in transport services bought
+        # by j is captured.
+        # Diagonal fix: when j IS a transport industry, the T=j term of
+        # the sum contains e_oil[j]·L[j, j]. The leading "1" of L[j, j] is
+        # j's own direct purchase — already in `oil`. Subtract it so
+        # direct + via_transport + non_transport remains a clean partition.
+        oil_via_transport = sum(
+            float(e_oil[ti]) * float(L_full[ti, i]) for ti in transport_idx
+        )
+        if i in transport_idx:
+            oil_via_transport -= float(e_oil[i])
+        # Residual: indirect oil through non-transport intermediates
+        # (chemicals, plastics, basic metals, agriculture etc.).
+        oil_indirect_non_transport = indirect_oil - oil_via_transport
+
+        # GVA conversion factor: a share-of-output × (output / GVA) = share-of-GVA.
+        # Applied identically to direct and total because both are denominated
+        # by gross output at basic prices in the A and L matrices.
+        meta   = gva_out.get(code, {})
+        gva    = meta.get("gva_gbpm",    0.0)
+        output = meta.get("output_gbpm", 0.0)
+        gva_ratio = (output / gva) if gva else None  # output / GVA — multiplier
+
+        # Import flag: share of j's total intermediate input spending that is
+        # imported. Industries with high values have a meaningful upstream
+        # supply-chain undercount (foreign embodied energy in imported non-
+        # energy intermediates is NOT in the domestic Leontief).
+        imp_meta = imports.get(code, {})
+        import_intensity = imp_meta.get("import_intensity", 0.0)
+
+        def to_gva(x):
+            return (x * gva_ratio) if (gva_ratio is not None and x is not None) else None
+
+        # ETII-style direct gas+elec / GVA cost share — DESNZ uses the 80th
+        # percentile of this metric as its eligibility cutoff.
+        gas_elec_direct_gva   = to_gva(gas + elec)
+        # Total (direct + indirect) gas+elec+oil / GVA — the comparable
+        # all-fuels share-of-GVA used in most academic energy-intensity work.
+        total_share_gva       = to_gva(direct_share + indirect_gas + indirect_elec + indirect_oil)
+        # Direct all-fuels / GVA — useful side-by-side with ETII (electricity+gas
+        # only) to see how much oil adds to the direct share.
+        direct_share_gva      = to_gva(direct_share)
+
         out_rows.append({
             "code": code,
-            "name": name,
+            "name":      short_name(code, name),
+            "name_full": name.strip(),
+            # Direct (column of A) — share of gross output
             "direct_gas":   gas,
             "direct_elec":  elec,
             "direct_oil":   oil,
             "direct_share": direct_share,
+            # Total embodied (column of L) — share of gross output
+            "total_gas":   total_gas,
+            "total_elec":  total_elec,
+            "total_oil":   total_oil,
+            "total_share": total_gas + total_elec + total_oil,
+            # Indirect = total − direct
+            "indirect_gas":  indirect_gas,
+            "indirect_elec": indirect_elec,
+            "indirect_oil":  indirect_oil,
+            # Channel decomposition of indirect oil
+            "oil_via_transport":          oil_via_transport,
+            "oil_indirect_non_transport": oil_indirect_non_transport,
+            # GVA + share-of-GVA versions for literature comparison
+            "gva_gbpm":             gva,
+            "output_gbpm":          output,
+            "gas_elec_direct_gva":  gas_elec_direct_gva,
+            "direct_share_gva":     direct_share_gva,
+            "total_share_gva":      total_share_gva,
+            # Import intensity of intermediate inputs — flag for the
+            # residual MRIO gap (foreign embodied energy in imported non-
+            # energy intermediates, not captured by domestic Leontief).
+            "import_intensity":     import_intensity,
+            # DESNZ ETII flag (etii / partial / null) — see ETII_STATUS above.
+            "etii":                 ETII_STATUS.get(code),
+            "imp_total_gbpm":       imp_meta.get("imp_total_gbpm", 0.0),
+            "imp_oil_gbpm":         imp_meta.get("imp_oil_gbpm",   0.0),
+            "imp_gas_gbpm":         imp_meta.get("imp_gas_gbpm",   0.0),
+            "imp_elec_gbpm":        imp_meta.get("imp_elec_gbpm",  0.0),
         })
 
     # Run scenarios
@@ -213,6 +614,7 @@ def build():
         "source": "ONS UK Input-Output Analytical Tables (Industry by Industry), reference year 2023; "
                   "Blue Book 2025 vintage; file data/iot2023industry.xlsx.",
         "energy_codes": ENERGY_CODES,
+        "transport_codes": TRANSPORT_CODES,
         "n_industries": n,
         "horizon_quarters": HORIZON_QUARTERS,
         "shock_unit": SHOCK_UNIT,
@@ -223,7 +625,13 @@ def build():
             "full pass-through long-run limit. Dynamic path built by Neumann "
             "series with one round = one quarter. Realistic scenarios apply "
             "sector-specific rho_j pass-through coefficients (calibrated from "
-            "Ganapati/Shapiro/Walker 2020 and Lafrogne-Joussier/Martin/Mejean 2023)."
+            "Ganapati/Shapiro/Walker 2020 and Lafrogne-Joussier/Martin/Mejean 2023). "
+            "Energy-share columns use a corrected energy-intensity vector at "
+            "each domestic node, e_fuel[i] = A_dom[fuel,i] + A_imp[fuel,i], "
+            "propagated through the domestic Leontief L_dom = (I-A_dom)^-1. "
+            "This captures imported jet/bunker/diesel directly and via the "
+            "transport channel, but does NOT capture foreign embodied energy "
+            "in imported non-energy intermediates — see import_intensity flag."
         ),
         "industries": out_rows,
     }
