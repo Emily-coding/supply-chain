@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8"/>
-<title>UK supply chains — energy price IRF by SIC 2007</title>
+<title>UK supply chains — energy exposures by SIC 2007</title>
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
 <style>
 :root{
@@ -15,6 +15,16 @@ html,body{background:var(--bg);color:var(--text);
   font:13px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif}
 a{color:var(--accent);text-decoration:none}
 a:hover{text-decoration:underline}
+
+/* ── tabs ── */
+nav.tabs{display:flex;background:var(--panel);padding:0 28px;border-bottom:1px solid var(--line)}
+nav.tabs a{
+  display:inline-block;padding:11px 18px;color:var(--muted);
+  font-size:13px;font-weight:500;
+  border-bottom:2px solid transparent;
+}
+nav.tabs a:hover{color:var(--text);text-decoration:none}
+nav.tabs a.active{color:var(--accent);border-bottom-color:var(--accent);font-weight:600}
 
 /* ── layout ── */
 header{padding:20px 28px 16px;border-bottom:1px solid var(--line)}
@@ -39,16 +49,6 @@ input[type=search]{
   padding:5px 10px;border-radius:6px;font-size:12px;flex:1;min-width:200px
 }
 input[type=search]::placeholder{color:var(--muted)}
-.qslider-wrap{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--muted)}
-.qslider-wrap input{accent-color:var(--accent);width:110px;cursor:pointer}
-.qslider-wrap span{color:var(--text);font-weight:600;min-width:70px}
-
-/* ── chart panels ── */
-.charts-row{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:20px}
-@media(max-width:900px){.charts-row{grid-template-columns:1fr}}
-.chart-box{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:14px}
-.chart-box h3{font-size:12px;font-weight:600;color:var(--muted);margin-bottom:10px}
-svg.chart{width:100%;overflow:visible}
 
 /* ── table ── */
 .tbl-wrap{overflow-x:auto;border-radius:8px;border:1px solid var(--line)}
@@ -61,7 +61,6 @@ th:hover{color:var(--accent)}
 th .arr{opacity:.45;margin-left:3px;font-size:9px}
 tr:last-child td{border-bottom:none}
 tr:hover td{background:#1e2435}
-tr.pinned td{background:#1a2240}
 td.num{text-align:right;font-variant-numeric:tabular-nums;font-family:ui-monospace,monospace;font-size:11px}
 td.name-cell{max-width:280px;white-space:normal;line-height:1.3}
 .gva-col{background:rgba(94,160,255,0.05);border-left:1px solid rgba(94,160,255,0.18)}
@@ -74,7 +73,6 @@ th.imp-col{background:#26200f}
 .b-q{background:rgba(239,91,91,.15);color:#ff8383;border:1px solid rgba(239,91,91,.35)}
 .b-m{background:rgba(245,166,35,.15);color:#ffc266;border:1px solid rgba(245,166,35,.35)}
 .b-p{background:rgba(46,204,113,.15);color:#6fe3a2;border:1px solid rgba(46,204,113,.35)}
-.b-i{background:rgba(122,111,255,.15);color:#a59aff;border:1px solid rgba(122,111,255,.35)}
 .b-etii{background:rgba(94,160,255,.18);color:#a3c5ff;border:1px solid rgba(94,160,255,.45)}
 .b-etii-p{background:rgba(94,160,255,.08);color:#7d99c8;border:1px solid rgba(94,160,255,.25);font-style:italic}
 
@@ -97,67 +95,30 @@ th.imp-col{background:#26200f}
 .note{background:var(--panel2);border:1px solid var(--line);border-radius:6px;
       padding:10px 14px;font-size:11px;color:var(--muted);margin-bottom:16px;line-height:1.6}
 .note strong{color:#cbd3e1}
-
-/* ── methodology ── */
-details{background:var(--panel);border:1px solid var(--line);border-radius:8px;
-        padding:12px 16px;margin-top:12px}
-details summary{cursor:pointer;font-weight:600;font-size:13px;color:#cbd3e1}
-details[open] summary{margin-bottom:10px}
-.mtext{color:#aab4c8;font-size:12px;line-height:1.65;max-width:860px}
-.mtext p{margin-bottom:8px}
-.eq{background:#0b0d13;border:1px solid var(--line);padding:7px 12px;border-radius:5px;
-    font-family:ui-monospace,monospace;font-size:11.5px;color:#cbd3e1;margin:6px 0 10px}
 </style>
 </head>
 <body>
+
+<nav class="tabs">
+  <a href="index.html" class="active">Energy exposures by SIC</a>
+  <a href="irf.html">Energy-price IRF</a>
+</nav>
+
 <header>
-  <h1>UK supply chains — energy price impulse response by SIC 2007</h1>
-  <p>How a shock to energy producer prices propagates through UK supply chains. Built from the
-  <strong>ONS 2023 Input-Output Analytical Tables (Industry × Industry)</strong>
-  using a Leontief price-side IRF. Sector-specific pass-through coefficients ρ from
-  Ganapati/Shapiro/Walker (AEJ Applied 2020) and Lafrogne-Joussier/Martin/Méjean (CEPII 2023).
-  Click any row to pin/unpin it on the line chart.</p>
+  <h1>UK supply chains — energy exposures by SIC 2007</h1>
+  <p>Direct and indirect energy cost shares per UK industry, from the
+  <strong>ONS 2023 Input-Output Analytical Tables (Industry × Industry)</strong>.
+  Direct cost shares are corrected for imports of energy products (jet kerosene,
+  marine bunker, diesel, gas, electricity); indirect propagation uses the
+  domestic Leontief inverse. ETII tags from DESNZ Jan 2023 list. Calibrated
+  pass-through ρ from Ganapati/Shapiro/Walker (2020) and Lafrogne-Joussier/Martin/Méjean (2023).</p>
 </header>
 <main>
 
 <!-- ── data note ── -->
 <div class="note" id="meta-note">Loading ONS IxI data…</div>
 
-<!-- ── controls ── -->
-<section>
-  <div class="ctrl-bar">
-    <div class="ctrl-group" id="scen-grp">
-      <button class="active" data-scen="unit">+10% all energy (unit)</button>
-      <button data-scen="s2022">2022 shock (gas +250%, elec +200%, oil +50%)</button>
-    </div>
-    <div class="ctrl-group" id="pt-grp">
-      <button class="active" data-pt="full">Full pass-through</button>
-      <button data-pt="realistic">Realistic ρ</button>
-    </div>
-    <div class="qslider-wrap">
-      <label for="qslider">Quarter:</label>
-      <input type="range" id="qslider" min="1" max="12" value="4"/>
-      <span id="qval">Q4 (1 year)</span>
-    </div>
-    <input type="search" id="search" placeholder="Filter by code or name…"/>
-  </div>
-</section>
-
-<!-- ── charts ── -->
-<section>
-  <div class="charts-row">
-    <div class="chart-box">
-      <h3>IRF line chart — producer price response over time (% change)</h3>
-      <div id="line-chart-wrap"></div>
-    </div>
-    <div class="chart-box">
-      <h3>Bar snapshot — top 20 industries at selected quarter</h3>
-      <div id="bar-chart-wrap"></div>
-    </div>
-  </div>
-</section>
-
-<!-- ── exposures table — direct + indirect energy by SIC with road/air channel decomp ── -->
+<!-- ── exposures table — direct + indirect energy by SIC ── -->
 <section id="exposures">
   <h2>Supply-chain energy exposures by SIC — direct + indirect</h2>
   <p style="color:var(--muted);font-size:12px;margin-bottom:10px;max-width:960px">
@@ -170,16 +131,16 @@ details[open] summary{margin-bottom:10px}
   propagation passes through UK industries only. Default view shows the three fuel
   <strong>totals</strong> (direct + indirect via UK supply chain). Click
   <em>Show direct/indirect breakdown</em> to split each total into its direct
-  (e<sub>fuel</sub>[j], UK + imp) and UK-domestic-indirect parts. The blue-tinted column rebases <strong>direct</strong>
-  gas+electricity to share of <strong>GVA</strong> — this is the DESNZ ETII formula
-  (80th-percentile cutoff ≈ 8.3% in this dataset defines ETII eligibility). We don't
-  show "Total/GVA" because Leontief total embodies energy across the whole supply
-  chain (output-scaled numerator) over a much smaller value-added denominator —
-  it produces &gt;100% values that aren't economically interpretable as "energy share
-  of value added". <strong>Imp%</strong> is the share of
-  j's intermediate input spending that is imported — a flag for how much of the upstream
-  supply chain is unmeasured (foreign embodied energy in imported non-energy intermediates).
-  <strong>ρ</strong> is calibrated pass-through; the badge is the implied adjustment margin.
+  (e<sub>fuel</sub>[j], UK + imp) and UK-domestic-indirect parts. The blue-tinted column
+  rebases <strong>direct</strong> gas+electricity to share of <strong>GVA</strong> — this
+  is the DESNZ ETII formula (80th-percentile cutoff ≈ 8.3% in this dataset defines ETII
+  eligibility). We don't show "Total/GVA" because Leontief total embodies energy across
+  the whole supply chain (output-scaled numerator) over a much smaller value-added
+  denominator — it produces &gt;100% values that aren't economically interpretable as
+  "energy share of value added". <strong>Imp%</strong> is the share of j's intermediate
+  input spending that is imported — a flag for how much of the upstream supply chain is
+  unmeasured (foreign embodied energy in imported non-energy intermediates). The badge
+  is the implied adjustment margin under an energy-cost shock; hover for ρ value.
   </p>
 
   <div class="ctrl-bar" style="margin-bottom:8px">
@@ -193,6 +154,7 @@ details[open] summary{margin-bottom:10px}
       <button data-etii-filter="partial">Partial</button>
       <button data-etii-filter="none">Not ETII</button>
     </div>
+    <input type="search" id="search" placeholder="Filter by code or name…"/>
   </div>
 
   <div class="tbl-wrap">
@@ -201,6 +163,7 @@ details[open] summary{margin-bottom:10px}
       <tbody id="exp-tbody"></tbody>
     </table>
   </div>
+
   <!-- Literature panel -->
   <div class="note" style="margin-top:10px">
   <strong>Literature estimates of price / quantity adjustment.</strong>
@@ -238,104 +201,21 @@ details[open] summary{margin-bottom:10px}
   </div>
 </section>
 
-<!-- ── IRF table ── -->
-<section>
-  <h2>Industry IRF — producer price response by quarter (sortable)</h2>
-  <div class="tbl-wrap">
-    <table id="tbl">
-      <thead>
-        <tr>
-          <th data-k="code">Code<span class="arr">▾</span></th>
-          <th data-k="name">Industry<span class="arr">▾</span></th>
-          <th data-k="direct_share" title="Direct energy cost (gas+elec+refined oil) per £1 output">Direct<br>energy%<span class="arr">▾</span></th>
-          <th data-k="direct_gas" title="Gas per £1 output">Gas%<span class="arr">▾</span></th>
-          <th data-k="direct_elec" title="Electricity per £1 output">Elec%<span class="arr">▾</span></th>
-          <th data-k="irf_q1" title="PPI response at Q1 under selected scenario">Q1%<span class="arr">▾</span></th>
-          <th data-k="irf_q4" title="PPI response at Q4 (1 year)">Q4%<span class="arr">▾</span></th>
-          <th data-k="irf_q8" title="PPI response at Q8 (2 years)">Q8%<span class="arr">▾</span></th>
-          <th data-k="irf_q12" title="PPI response at Q12 (3 years)">Q12%<span class="arr">▾</span></th>
-          <th data-k="lr" title="Long-run Leontief limit (full pass-through only)">LR%<br>(full)<span class="arr">▾</span></th>
-          <th data-k="rho" title="Sector-specific pass-through coefficient">ρ<span class="arr">▾</span></th>
-          <th data-k="margin">Adjustment margin<span class="arr">▾</span></th>
-        </tr>
-      </thead>
-      <tbody id="tbody"></tbody>
-    </table>
-  </div>
-</section>
-
-<!-- ── methodology ── -->
-<section>
-<details open>
-  <summary>Methodology: Leontief price-side IRF from ONS Supply and Use Tables</summary>
-  <div class="mtext">
-  <p><strong>Data source.</strong> ONS Input-Output Analytical Tables, Industry by Industry,
-  reference year 2023 (Blue Book 2025 vintage). 101 non-energy industries × 101 industries.
-  The A coefficient matrix (direct input requirements per £1 of output) is taken directly
-  from ONS sheet "A"; the long-run Leontief inverse L = (I−A)⁻¹ from sheet "Leontief".</p>
-
-  <p><strong>Energy partition.</strong> Three industries are treated as exogenous price-setters
-  whose output prices are shocked: C19 (Coke &amp; refined petroleum), D351 (Electricity
-  generation, transmission &amp; distribution), D352_3 (Gas manufacture &amp; distribution).
-  All other 101 industries are endogenous.</p>
-
-  <p><strong>Long-run price model.</strong> Partition A into energy (E) and rest (R) blocks.
-  With no change in primary-input costs elsewhere, the steady-state response of non-energy
-  producer prices to an energy shock Δp<sub>E</sub> is:</p>
-  <div class="eq">Δp<sub>R</sub> = (I − A<sub>RR</sub>′)⁻¹ · A<sub>ER</sub>′ · Δp<sub>E</sub></div>
-  <p>This is the full pass-through ceiling — every firm instantly and fully passes costs on.</p>
-
-  <p><strong>Dynamic IRF (Neumann series).</strong> Real-world price adjustment is staggered.
-  The round-by-round expansion, where each round ≈ one quarter, is:</p>
-  <div class="eq">
-    Δp<sub>R</sub><sup>(1)</sup> = A<sub>ER</sub>′ Δp<sub>E</sub> &nbsp;(direct impact)<br>
-    Δp<sub>R</sub><sup>(k)</sup> = A<sub>ER</sub>′ Δp<sub>E</sub> + A<sub>RR</sub>′ Δp<sub>R</sub><sup>(k−1)</sup> &nbsp;(adds one supply-chain step per quarter)<br>
-    lim<sub>k→∞</sub> Δp<sub>R</sub><sup>(k)</sup> = (I − A<sub>RR</sub>′)⁻¹ A<sub>ER</sub>′ Δp<sub>E</sub>
-  </div>
-
-  <p><strong>Pass-through regimes.</strong> "Full" applies ρ = 1 everywhere. "Realistic" applies
-  sector-specific ρⱼ ∈ [0.35, 1.0] as a round-level dampener, calibrated to trade exposure
-  and market power. Commodity, trade-exposed EII sectors (steel 0.35, non-ferrous metals 0.35,
-  industrial gases 0.40, glass/ceramics 0.50, paper 0.55) reflect the Ganapati et al.
-  incomplete pass-through result (~70% avg US manufacturing, lower for competitive industries).
-  Food, utilities and services (ρ = 0.90–1.00) reflect LMM's near-complete pass-through for
-  domestically-oriented concentrated sectors. The gap between full and realistic at q12 is the
-  portion absorbed via margin compression or output reduction.</p>
-
-  <p><strong>Shock scenarios.</strong> Unit: +10% to each energy product price simultaneously.
-  2022-calibrated: refined petroleum +50%, electricity +200%, gas +250% — broadly matching
-  peak wholesale moves from 2021 Q1 to 2022 Q3. Results scale linearly with shock size.</p>
-
-  <p><strong>Adjustment margin classification.</strong> Derived from ρⱼ: ρ ≤ 0.55 → Quantity-led
-  (large residual absorbed in output/margins); 0.55 &lt; ρ &lt; 0.85 → Mixed; ρ ≥ 0.85 → Price-led.
-  Corroborated by ONS (2025): energy-intensive manufacturing output −33.6% from 2021 Q1 to
-  2024 Q4.</p>
-  </div>
-</details>
-</section>
-
 </main>
 <footer>
-  Source: ONS Input-Output Analytical Tables, Industry × Industry, 2023 reference year (Blue Book 2025).
+  Source: ONS Input-Output Analytical Tables, Industry × Industry, 2023 reference year (Blue Book 2025);
+  ONS Imports use pxi (product workbook) for direct-imports correction.
   Pass-through calibration: Ganapati/Shapiro/Walker (AEJ Applied 2020); Lafrogne-Joussier/Martin/Méjean (CEPII 2023).
+  ETII tags: DESNZ Jan 2023 ETII methodology PDF.
   See <a href="uk-energy-exposure.md">uk-energy-exposure.md</a> for full reference list.
 </footer>
 
 <script>
-/* ──────────────────────────────────────────────────────────
-   Config & helpers
-────────────────────────────────────────────────────────── */
-const PALETTE = [
-  "#5ea0ff","#2ecc71","#ef5b5b","#f5a623","#a259ff","#00d2d3",
-  "#ff9ff3","#ffd32a","#0abde3","#ee5a24","#10ac84","#c56cf0",
-  "#ff6b81","#7bed9f","#eccc68","#70a1ff","#ff4757","#2ed573"
-];
 const MARGIN_LABEL = {q:"Quantity-led",m:"Mixed",p:"Price-led"};
 const MARGIN_CLASS = {q:"b-q",m:"b-m",p:"b-p"};
 
 function pct(v,dp=1){return v===null||v===undefined?"—":(v*100).toFixed(dp)+"%"}
 function heatColor(v){
-  // returns inline style string for heatmap cell
   if(!v) return "background:#1b2030;color:#556";
   const pv = Math.min(Math.abs(v)*100,25);
   const a  = Math.min(0.9, pv/12);
@@ -348,29 +228,12 @@ function margin(rho){
   return "p";
 }
 
-/* ──────────────────────────────────────────────────────────
-   State
-────────────────────────────────────────────────────────── */
 let allData = [];
-let scen  = "unit";  // unit | s2022
-let pt    = "full";  // full | realistic
-let qsel  = 4;
 let searchTerm = "";
-let sortKey = "irf_q4", sortDir = -1;
-// Independent sort for the exposures table — the question it answers is
-// different (cost share rather than IRF dynamics) so the sort persists separately.
 let expSortKey = "total_share", expSortDir = -1;
 let expMode = "summary";        // summary | breakdown
 let expEtiiFilter = "all";      // all | etii | partial | none
-let pinned = new Set();
 
-// Column definitions for each exposures-table mode. Single source of truth so
-// that the header and the row renderer can never drift apart.
-//   key   → field on the row
-//   label → header text (HTML allowed)
-//   title → hover tooltip
-//   cls   → extra td/th class (gva-col adds blue tint)
-//   fmt   → 'pct' | 'rho' | 'margin' | 'code' | 'name' | 'heat'
 const EXP_COLS = {
   summary: [
     {key:"code",                label:"Code",                                       fmt:"code"},
@@ -382,7 +245,7 @@ const EXP_COLS = {
     {key:"gas_elec_direct_gva", label:"Gas+Elec /<br>GVA",   title:"Direct (UK + imp) gas + electricity / GVA — DESNZ ETII metric (80th-percentile cutoff ≈ 8.3% in this dataset)", cls:"gva-col", fmt:"heatGVA"},
     {key:"import_intensity",    label:"Imp%",      title:"Imports as share of j's intermediate input spending — flag for unmeasured upstream supply chain (foreign embodied energy in imported non-energy intermediates)", cls:"imp-col", fmt:"pct"},
     {key:"etii",                label:"DESNZ<br>ETII",  title:"DESNZ ETII status (Jan 2023 list, mapped from 4-digit SIC to IOAT bucket): ETII = whole bucket on list; Partial = some sub-codes on list; — = none on list", fmt:"etii"},
-    {key:"margin",              label:"Adjustment margin",  title:"Likely adjustment margin under an energy-cost shock, derived from a sector-specific pass-through coefficient ρ calibrated to Ganapati/Shapiro/Walker (AEJ Applied 2020) and Lafrogne-Joussier/Martin/Méjean (CEPII 2023). ρ ≤ 0.55 → Quantity-led (firms cut output / lose share rather than raise prices); 0.55 < ρ < 0.85 → Mixed; ρ ≥ 0.85 → Price-led (concentrated / domestic-oriented sectors with full or excess pass-through).", fmt:"margin"},
+    {key:"margin",              label:"Adjustment margin",  title:"Likely adjustment margin under an energy-cost shock, derived from a sector-specific pass-through coefficient ρ calibrated to Ganapati/Shapiro/Walker (AEJ Applied 2020) and Lafrogne-Joussier/Martin/Méjean (CEPII 2023). ρ ≤ 0.55 → Quantity-led; 0.55 < ρ < 0.85 → Mixed; ρ ≥ 0.85 → Price-led.", fmt:"margin"},
   ],
   breakdown: [
     {key:"code",                label:"Code",                                       fmt:"code"},
@@ -401,181 +264,6 @@ const EXP_COLS = {
   ],
 };
 
-function scenKey(){ return `${scen}_${pt}`; }
-function irfQ(row, q){ return row[`${scenKey()}_irf`]?.[q] ?? null; }
-function lrVal(row){   return row[`unit_full_lr`] ?? null; } // always full for LR col
-
-function enrichRow(r){
-  return {
-    ...r,
-    irf_q1  : irfQ(r,1),
-    irf_q4  : irfQ(r,4),
-    irf_q8  : irfQ(r,8),
-    irf_q12 : irfQ(r,12),
-    lr      : lrVal(r),
-    margin_c: margin(r.rho),
-  };
-}
-
-/* ──────────────────────────────────────────────────────────
-   LINE CHART (SVG)
-────────────────────────────────────────────────────────── */
-function drawLine(data){
-  const wrap = document.getElementById("line-chart-wrap");
-  const W=680, H=260, ML=44, MR=16, MT=10, MB=36;
-  const cw = W-ML-MR, ch = H-MT-MB;
-  const QUARTERS = 12;
-
-  // Select which rows to draw: pinned + top-10 by qsel
-  const sorted = [...data].sort((a,b)=>Math.abs(irfQ(b,qsel)||0)-Math.abs(irfQ(a,qsel)||0));
-  const top10 = sorted.slice(0,10).map(r=>r.code);
-  const show  = [...new Set([...pinned, ...top10])].slice(0,16);
-
-  // Y domain
-  let yMax = 0.001;
-  data.forEach(r=>{
-    if(!show.includes(r.code)) return;
-    for(let q=1;q<=QUARTERS;q++) yMax = Math.max(yMax, Math.abs(irfQ(r,q)||0));
-  });
-  yMax = Math.ceil(yMax*100)/100 * 1.1;
-
-  const xs = q => ML + (q/QUARTERS)*cw;
-  const ys = v => MT + (1 - v/yMax)*ch;
-
-  const yticks = 5;
-  let svg = `<svg viewBox="0 0 ${W} ${H}" class="chart">`;
-
-  // Grid + y-axis ticks
-  for(let i=0;i<=yticks;i++){
-    const v = yMax*i/yticks;
-    const y = ys(v);
-    svg += `<line x1="${ML}" y1="${y}" x2="${W-MR}" y2="${y}" stroke="#242936" stroke-width="1"/>`;
-    svg += `<text x="${ML-4}" y="${y+4}" text-anchor="end" font-size="10" fill="#6a7488">${(v*100).toFixed(1)}%</text>`;
-  }
-  // X-axis ticks
-  for(let q=0;q<=QUARTERS;q+=2){
-    const x=xs(q);
-    svg += `<line x1="${x}" y1="${MT}" x2="${x}" y2="${MT+ch+4}" stroke="#242936" stroke-width="1"/>`;
-    svg += `<text x="${x}" y="${H-4}" text-anchor="middle" font-size="10" fill="#6a7488">Q${q||0}</text>`;
-  }
-  // Quarter marker
-  {
-    const x = xs(qsel);
-    svg += `<line x1="${x}" y1="${MT}" x2="${x}" y2="${MT+ch}" stroke="rgba(94,160,255,.45)" stroke-width="1.5" stroke-dasharray="4,3"/>`;
-  }
-
-  // Lines
-  show.forEach((code,ci)=>{
-    const row = data.find(r=>r.code===code); if(!row) return;
-    const col = PALETTE[ci % PALETTE.length];
-    let pts = [[xs(0),ys(0)]];
-    for(let q=1;q<=QUARTERS;q++) pts.push([xs(q), ys(irfQ(row,q)||0)]);
-    const d = pts.map((p,i)=>(i===0?"M":"L")+p[0].toFixed(1)+","+p[1].toFixed(1)).join(" ");
-    const bold = pinned.has(code) ? "3" : "1.5";
-    svg += `<path d="${d}" fill="none" stroke="${col}" stroke-width="${bold}" stroke-linejoin="round"/>`;
-    // Label at end
-    const [lx,ly] = pts[pts.length-1];
-    const label = code.length>10 ? code.slice(0,10)+"…" : code;
-    svg += `<text x="${lx+3}" y="${ly+4}" font-size="9" fill="${col}">${label}</text>`;
-  });
-
-  svg += `</svg>`;
-
-  // Legend
-  let leg = `<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:8px;font-size:10px">`;
-  show.forEach((code,ci)=>{
-    const row = data.find(r=>r.code===code); if(!row) return;
-    const col = PALETTE[ci % PALETTE.length];
-    const bold = pinned.has(code) ? "font-weight:700" : "";
-    leg += `<span style="color:${col};${bold};cursor:pointer" data-pin="${code}">`+
-           `● ${code}</span>`;
-  });
-  leg += `</div>`;
-  wrap.innerHTML = svg + leg;
-  wrap.querySelectorAll("[data-pin]").forEach(el=>el.addEventListener("click",()=>{
-    const c=el.dataset.pin;
-    if(pinned.has(c)) pinned.delete(c); else pinned.add(c);
-    render();
-  }));
-}
-
-/* ──────────────────────────────────────────────────────────
-   BAR CHART (SVG)
-────────────────────────────────────────────────────────── */
-function drawBar(data){
-  const wrap = document.getElementById("bar-chart-wrap");
-  const TOP  = 20;
-  const sorted = [...data].sort((a,b)=>(irfQ(b,qsel)||0)-(irfQ(a,qsel)||0)).slice(0,TOP);
-  const W=480, ML=140, MR=55, barH=10, gap=4;
-  const H = (barH+gap)*TOP + 20;
-
-  const maxV = Math.max(...sorted.map(r=>Math.abs(irfQ(r,qsel)||0)));
-  const bw = v => (Math.abs(v)/maxV)*(W-ML-MR);
-
-  let svg = `<svg viewBox="0 0 ${W} ${H}" class="chart">`;
-  sorted.forEach((r,i)=>{
-    const v  = irfQ(r,qsel)||0;
-    const y  = i*(barH+gap)+8;
-    const bx = ML;
-    const w  = bw(v);
-    const col= r.rho<=0.55?"#ef5b5b": r.rho<0.85?"#f5a623":"#2ecc71";
-    const nm = r.name.length>22 ? r.name.slice(0,22)+"…" : r.name;
-    svg += `<text x="${ML-4}" y="${y+barH-1}" text-anchor="end" font-size="9" fill="#8a93a6">${nm}</text>`;
-    svg += `<rect x="${bx}" y="${y}" width="${w.toFixed(1)}" height="${barH}" rx="2" fill="${col}" fill-opacity=".8"/>`;
-    svg += `<text x="${bx+w+3}" y="${y+barH-1}" font-size="9" fill="#e6e9f0">${(v*100).toFixed(1)}%</text>`;
-  });
-  svg += `</svg>`;
-  wrap.innerHTML = svg;
-}
-
-/* ──────────────────────────────────────────────────────────
-   TABLE
-────────────────────────────────────────────────────────── */
-function drawTable(data){
-  const term = searchTerm.toLowerCase();
-  let rows = data.map(enrichRow).filter(r=>
-    !term || (r.code+" "+r.name).toLowerCase().includes(term)
-  );
-
-  rows.sort((a,b)=>{
-    let va = a[sortKey]??-Infinity;
-    let vb = b[sortKey]??-Infinity;
-    if(typeof va==="string") return sortDir*(va<vb?-1:va>vb?1:0);
-    return sortDir*(va-vb);
-  });
-
-  const tbody = document.getElementById("tbody");
-  tbody.innerHTML = rows.map(r=>{
-    const pin = pinned.has(r.code)?"pinned":"";
-    const mc  = MARGIN_CLASS[r.margin_c];
-    return `<tr class="${pin}" data-code="${r.code}">
-      <td><code style="font-size:11px">${r.code}</code></td>
-      <td class="name-cell">${r.name}</td>
-      <td class="num"><span class="heat" style="${heatColor(r.direct_share)}">${pct(r.direct_share)}</span></td>
-      <td class="num">${pct(r.direct_gas)}</td>
-      <td class="num">${pct(r.direct_elec)}</td>
-      <td class="num">${pct(r.irf_q1)}</td>
-      <td class="num">${pct(r.irf_q4)}</td>
-      <td class="num">${pct(r.irf_q8)}</td>
-      <td class="num">${pct(r.irf_q12)}</td>
-      <td class="num">${pct(r.lr)}</td>
-      <td class="num">${r.rho.toFixed(2)}</td>
-      <td><span class="badge ${mc}">${MARGIN_LABEL[r.margin_c]}</span></td>
-    </tr>`;
-  }).join("");
-
-  tbody.querySelectorAll("tr").forEach(tr=>tr.addEventListener("click",()=>{
-    const c=tr.dataset.code;
-    if(pinned.has(c)) pinned.delete(c); else pinned.add(c);
-    render();
-  }));
-}
-
-/* ──────────────────────────────────────────────────────────
-   Exposures table — direct + indirect energy by SIC, oil split
-   into via-road / via-air / other indirect channels. Independent
-   of the scenario controls (this is structural cost share, not IRF).
-────────────────────────────────────────────────────────── */
 function renderExpCell(r, col){
   const cls = col.cls ? ` ${col.cls}` : "";
   switch(col.fmt){
@@ -610,7 +298,6 @@ function renderExpCell(r, col){
 function drawExposures(data){
   const cols = EXP_COLS[expMode];
 
-  // Header — rebuilt each render so it tracks the active mode.
   const thead = document.getElementById("exp-thead");
   thead.innerHTML = "<tr>" + cols.map(c => {
     const cls = c.cls ? ` class="${c.cls}"` : "";
@@ -643,67 +330,30 @@ function drawExposures(data){
     `<tr data-code="${r.code}">${cols.map(c => renderExpCell(r, c)).join("")}</tr>`
   ).join("");
 
-  // Re-bind sort handlers because thead was rebuilt.
   thead.querySelectorAll("th[data-k]").forEach(th => th.addEventListener("click", () => {
     const k = th.dataset.k;
     if (expSortKey === k) expSortDir *= -1; else { expSortKey = k; expSortDir = -1; }
-    render();
+    drawExposures(allData);
   }));
 }
 
-/* ──────────────────────────────────────────────────────────
-   Main render
-────────────────────────────────────────────────────────── */
-function render(){
-  const enriched = allData.map(enrichRow);
-  drawLine(enriched);
-  drawBar(enriched);
-  drawTable(allData);
-  drawExposures(allData);
-}
-
-/* ──────────────────────────────────────────────────────────
-   Wire controls
-────────────────────────────────────────────────────────── */
-document.querySelectorAll("#scen-grp button").forEach(b=>b.addEventListener("click",()=>{
-  document.querySelectorAll("#scen-grp button").forEach(x=>x.classList.remove("active"));
-  b.classList.add("active"); scen=b.dataset.scen; render();
-}));
-document.querySelectorAll("#pt-grp button").forEach(b=>b.addEventListener("click",()=>{
-  document.querySelectorAll("#pt-grp button").forEach(x=>x.classList.remove("active"));
-  b.classList.add("active"); pt=b.dataset.pt; render();
-}));
-const slider=document.getElementById("qslider");
-const qval  =document.getElementById("qval");
-slider.addEventListener("input",()=>{
-  qsel=+slider.value;
-  qval.textContent=`Q${qsel} (${qsel<4?"<1 yr":qsel===4?"1 year":qsel===8?"2 years":"3 years"})`;
-  render();
-});
-document.getElementById("search").addEventListener("input",e=>{
-  searchTerm=e.target.value; render();
-});
-document.querySelectorAll("#tbl thead th[data-k]").forEach(th=>th.addEventListener("click",()=>{
-  const k=th.dataset.k;
-  if(sortKey===k) sortDir*=-1; else{sortKey=k;sortDir=-1;}
-  render();
-}));
 document.querySelectorAll("#exp-mode-grp button").forEach(b=>b.addEventListener("click",()=>{
   document.querySelectorAll("#exp-mode-grp button").forEach(x=>x.classList.remove("active"));
   b.classList.add("active");
   expMode = b.dataset.expMode;
-  render();
+  drawExposures(allData);
 }));
 document.querySelectorAll("#exp-etii-grp button").forEach(b=>b.addEventListener("click",()=>{
   document.querySelectorAll("#exp-etii-grp button").forEach(x=>x.classList.remove("active"));
   b.classList.add("active");
   expEtiiFilter = b.dataset.etiiFilter;
-  render();
+  drawExposures(allData);
 }));
+document.getElementById("search").addEventListener("input",e=>{
+  searchTerm = e.target.value;
+  drawExposures(allData);
+});
 
-/* ──────────────────────────────────────────────────────────
-   Load data
-────────────────────────────────────────────────────────── */
 fetch("data/irf.json")
   .then(r=>r.json())
   .then(d=>{
@@ -711,11 +361,9 @@ fetch("data/irf.json")
     document.getElementById("meta-note").innerHTML =
       `<strong>Data:</strong> ${d.source} &nbsp;·&nbsp; `+
       `<strong>${d.n_industries}</strong> industries &nbsp;·&nbsp; `+
-      `<strong>Energy products shocked:</strong> ${d.energy_codes.join(", ")} &nbsp;·&nbsp; `+
-      `<strong>Unit shock:</strong> +10% all energy &nbsp;·&nbsp; `+
-      `<strong>2022 shock:</strong> gas +250%, elec +200%, refined +50% &nbsp;·&nbsp; `+
-      `<em>Click any table row or legend label to pin/unpin on the line chart.</em>`;
-    render();
+      `<strong>Direct cost shares:</strong> domestic A + imports of CPA_C19 / CPA_D351 / CPA_D352_3 from Imports use pxi &nbsp;·&nbsp; `+
+      `<strong>Indirect:</strong> domestic Leontief (I − A_dom)<sup>−1</sup>`;
+    drawExposures(allData);
   })
   .catch(e=>{
     document.getElementById("meta-note").innerHTML =
